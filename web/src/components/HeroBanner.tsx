@@ -25,6 +25,7 @@ import { HERO_BANNER_SIZE } from "@/lib/design-system";
 import { useAmbientColor } from "@/hooks/useAmbientColor";
 import { useHeroTrailersEnabled } from "@/hooks/useHeroTrailersEnabled";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { HeroOverviewText } from "./HeroOverviewText";
 import { heroClipUrl } from "./heroClips";
 import HeroTrailerLayer from "./HeroTrailerLayer";
@@ -190,6 +191,14 @@ export default function HeroBanner({
     outgoingIndex: null as number | null,
   });
   const [paused, setPaused] = useState(false);
+  const { isVisible: pageVisible } = usePageActivity();
+  const sectionRef = useRef<HTMLElement>(null);
+  // Unknown until the observer first reports, so a hero mounted below the
+  // fold preloads nothing; without IntersectionObserver it counts as shown.
+  const [onScreen, setOnScreen] = useState(() => typeof IntersectionObserver === "undefined");
+  // A hero scrolled out of view or in a background tab neither advances nor
+  // downloads the next slide's backdrop.
+  const shown = pageVisible && onScreen;
   const audiobookPlayback = useAudiobookPlaybackController();
   // Bumped whenever auto-advance restarts a fresh 8s cycle — after the slide
   // changes, or after the user unpauses. Used as part of the progress-rail key
@@ -267,7 +276,6 @@ export default function HeroBanner({
    * missing never leaves the backdrop still, so the hero is never a black
    * screen and never a spinner.
    */
-  const heroRef = useRef<HTMLElement | null>(null);
   const [clipHeld, setClipHeld] = useState(false);
   const [clipReady, setClipReady] = useState(false);
   const [clipFadeDone, setClipFadeDone] = useState(false);
@@ -383,7 +391,7 @@ export default function HeroBanner({
   }, []);
 
   useEffect(() => {
-    const hero = heroRef.current;
+    const hero = sectionRef.current;
 
     // Older browsers — and jsdom — have no observer: the hero simply keeps playing.
     if (!hero || typeof IntersectionObserver === "undefined") {
@@ -455,12 +463,22 @@ export default function HeroBanner({
   // with the progress rail that restarts on slide change. A slide with a clip
   // sets its own pace: the clip's end moves the carousel on, not a timer.
   useEffect(() => {
-    if (slides.length <= 1 || paused || hoverPaused || clipEnabled) return;
+    if (slides.length <= 1 || paused || !shown || hoverPaused || clipEnabled) return;
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) return;
     const timer = setInterval(next, 8000);
     return () => clearInterval(timer);
-  }, [next, slides.length, paused, hoverPaused, activeIndex, clipEnabled]);
+  }, [next, slides.length, paused, shown, hoverPaused, activeIndex, clipEnabled]);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) setOnScreen(entry.isIntersecting);
+    });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [slides.length]);
 
   useAmbientColor(current?.backdrop_thumbhash);
   if (slides.length === 0) return null;
@@ -515,7 +533,7 @@ export default function HeroBanner({
 
   return (
     <section
-      ref={heroRef}
+      ref={sectionRef}
       className={cn(
         "home-hero group relative w-full overflow-hidden",
         heightClassName,
@@ -530,7 +548,9 @@ export default function HeroBanner({
         if (!e.currentTarget.contains(e.relatedTarget)) releaseSlideshow();
       }}
     >
-      {/* Preload neighbors in both directions; retain loaded backdrops for crossfades. */}
+      {/* Preload the slide that comes next while the hero is shown; retain
+          loaded backdrops for crossfades. Going back fades in from the
+          thumbhash. */}
       {slides.map((slide, i) => (
         <HeroBackdropSlide
           key={slide.content_id ?? i}
@@ -551,8 +571,7 @@ export default function HeroBanner({
           shouldLoad={
             i === activeIndex ||
             i === outgoingIndex ||
-            i === (activeIndex + 1) % slideCount ||
-            i === (activeIndex - 1 + slideCount) % slideCount
+            (shown && i === (activeIndex + 1) % slideCount)
           }
         />
       ))}

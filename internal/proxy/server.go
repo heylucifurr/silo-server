@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,7 +23,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/Silo-Server/silo-server/internal/bandwidthprobe"
 	"github.com/Silo-Server/silo-server/internal/clientip"
@@ -34,6 +37,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/nodeauth"
 	"github.com/Silo-Server/silo-server/internal/nodeconfig"
 	"github.com/Silo-Server/silo-server/internal/nodemetrics"
+	"github.com/Silo-Server/silo-server/internal/nodepool"
 	"github.com/Silo-Server/silo-server/internal/noderouting"
 	"github.com/Silo-Server/silo-server/internal/nodesessions"
 	"github.com/Silo-Server/silo-server/internal/playback"
@@ -71,9 +75,9 @@ type Server struct {
 	// subCache stores complete embedded subtitle extracts under the transcode dir
 	// so repeat selections skip the whole-file ffmpeg demux.
 	subCache *playback.SubtitleCache
-	// Download limits are node-local once egress is delegated. Rebuild the
-	// manager when hot-reloaded settings change so existing transfers retain
-	// their original limiter while new transfers use the new values.
+	// Download byte budgets are shared with API instances when Redis is
+	// configured. Without it the manager keeps node-local limiters, which
+	// follow hot-reloaded settings through Reload.
 	downloadBandwidthMu sync.Mutex
 	downloadBandwidth   *downloads.BandwidthManager
 	downloadServerBPS   int64
@@ -764,8 +768,8 @@ func (s *Server) serveDirectPlayClaims(w http.ResponseWriter, r *http.Request, c
 	attachStream(r.Context(), claims)
 	noteDelivery(r, claims)
 	info := sessionInfo(s.tracker, claims, "direct_play")
-	s.tracker.Track(r.Context(), info)
-	defer s.tracker.Remove(r.Context(), claims.SessionID)
+	release := s.tracker.Hold(r.Context(), info)
+	defer release(context.WithoutCancel(r.Context()))
 
 	// Serve through the same path the integrated server uses rather than a bare
 	// http.ServeFile: direct_stream_resume_v1 requires the strong ETag that
@@ -797,8 +801,8 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	// the API's reservation before the client starts its GET.
 	if s.tracker != nil && r.Method != http.MethodHead {
 		info := sessionInfo(s.tracker, claims, "download")
-		s.tracker.Track(r.Context(), info)
-		defer s.tracker.Remove(context.WithoutCancel(r.Context()), claims.SessionID)
+		release := s.tracker.Hold(r.Context(), info)
+		defer release(context.WithoutCancel(r.Context()))
 	}
 	if remoteArtifact {
 		s.relayDownloadArtifact(w, r, claims)
@@ -900,19 +904,37 @@ func (s *Server) relayDownloadArtifact(w http.ResponseWriter, r *http.Request, c
 	}
 }
 
-func (s *Server) downloadBandwidthManager() *downloads.BandwidthManager {
-	cfg := s.watcher.Config()
-	if cfg == nil {
-		return nil
+// SetDownloadBandwidth wires the shared cluster budget before serving requests.
+func (s *Server) SetDownloadBandwidth(pool *pgxpool.Pool, client *redis.Client) {
+	var serverBPS, userBPS int64
+	if cfg := s.watcher.Config(); cfg != nil {
+		serverBPS, userBPS = cfg.Download.ServerBandwidthBPS, cfg.Download.UserBandwidthBPS
 	}
-	serverBPS := cfg.Download.ServerBandwidthBPS
-	userBPS := cfg.Download.UserBandwidthBPS
 	s.downloadBandwidthMu.Lock()
 	defer s.downloadBandwidthMu.Unlock()
-	if s.downloadBandwidth == nil || serverBPS != s.downloadServerBPS || userBPS != s.downloadUserBPS {
-		s.downloadBandwidth = downloads.NewBandwidthManager(serverBPS, userBPS)
-		s.downloadServerBPS = serverBPS
-		s.downloadUserBPS = userBPS
+	s.downloadBandwidth = downloads.NewBandwidthManager(serverBPS, userBPS)
+	s.downloadServerBPS, s.downloadUserBPS = serverBPS, userBPS
+	s.downloadBandwidth.SetSharedBudget(client, downloads.BandwidthRates(pool))
+}
+
+// downloadBandwidthManager applies hot-reloaded limits to the manager. A
+// standalone manager has no other source for them; a shared one also reads
+// the settings itself, so the reload only refreshes its cached rates sooner.
+func (s *Server) downloadBandwidthManager() *downloads.BandwidthManager {
+	s.downloadBandwidthMu.Lock()
+	defer s.downloadBandwidthMu.Unlock()
+	cfg := s.watcher.Config()
+	if s.downloadBandwidth == nil {
+		if cfg == nil {
+			return nil
+		}
+		s.downloadBandwidth = downloads.NewBandwidthManager(cfg.Download.ServerBandwidthBPS, cfg.Download.UserBandwidthBPS)
+		s.downloadServerBPS, s.downloadUserBPS = cfg.Download.ServerBandwidthBPS, cfg.Download.UserBandwidthBPS
+		return s.downloadBandwidth
+	}
+	if cfg != nil && (cfg.Download.ServerBandwidthBPS != s.downloadServerBPS || cfg.Download.UserBandwidthBPS != s.downloadUserBPS) {
+		s.downloadServerBPS, s.downloadUserBPS = cfg.Download.ServerBandwidthBPS, cfg.Download.UserBandwidthBPS
+		s.downloadBandwidth.Reload(s.downloadServerBPS, s.downloadUserBPS)
 	}
 	return s.downloadBandwidth
 }
@@ -964,8 +986,8 @@ func (s *Server) relayProgressiveRemux(w http.ResponseWriter, r *http.Request, c
 	attachStream(r.Context(), claims)
 	noteDelivery(r, claims)
 	info := sessionInfo(s.tracker, claims, "remux")
-	s.tracker.Track(r.Context(), info)
-	defer s.tracker.Remove(r.Context(), claims.SessionID)
+	release := s.tracker.Hold(r.Context(), info)
+	defer release(context.WithoutCancel(r.Context()))
 	s.proxyToTranscodeNode(w, r, claims, "/remux/"+transcodeTransportIDFromClaims(claims), forwardToken)
 }
 
@@ -987,11 +1009,10 @@ func (s *Server) serveRemuxClaims(w http.ResponseWriter, r *http.Request, claims
 	attachStream(r.Context(), claims)
 	noteDelivery(r, claims)
 	// A HEAD probe returns before the remux starts, so it is not an active
-	// stream: counting it would consume capacity, and its Remove would drop
-	// the entry of a GET already playing the same session.
+	// stream and must not count against this proxy's capacity.
 	if r.Method != http.MethodHead {
-		s.tracker.Track(r.Context(), sessionInfo(s.tracker, claims, "remux"))
-		defer s.tracker.Remove(r.Context(), claims.SessionID)
+		release := s.tracker.Hold(r.Context(), sessionInfo(s.tracker, claims, "remux"))
+		defer release(context.WithoutCancel(r.Context()))
 	}
 
 	seekSeconds := 0.0
@@ -1203,6 +1224,13 @@ func (s *Server) proxyToTranscodeNode(w http.ResponseWriter, r *http.Request, cl
 	sw := httpstream.NewRollingDeadlineWriter(w)
 	sw.WriteHeader(resp.StatusCode)
 	if _, copyErr := io.Copy(sw, resp.Body); copyErr != nil {
+		if r.Context().Err() == nil && errors.Is(copyErr, nodepool.ErrNodeNotAnswering) {
+			slog.WarnContext(r.Context(), "transcode node stopped answering during relay body read", "component", "proxy", "error", logredact.SanitizeText(copyErr.Error()), "node", logredact.SanitizeURL(claims.TranscodeNode), "playback_session_id", claims.SessionID)
+		}
+		if r.Context().Err() == nil {
+			// A clean end would let a chunked client accept the short body as complete.
+			panic(http.ErrAbortHandler)
+		}
 		return
 	}
 	if isMediaSegment && generation != "" && r.Method == http.MethodGet &&

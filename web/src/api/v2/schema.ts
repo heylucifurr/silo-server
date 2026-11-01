@@ -5033,6 +5033,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/stats/api-clients": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the sign-in sessions that made the most API requests in a window, from hourly summaries of the activity log. */
+    get: operations["getAdminDashboardAPIClients"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/stats/api-clients/{session_id}/endpoints": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the routes one sign-in session called most in a window. */
+    get: operations["getAdminDashboardAPIClientEndpoints"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/stats/downloads": {
     parameters: {
       query?: never;
@@ -12515,7 +12549,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Mark an item watched for the acting profile; a season or series marks every episode. Marking an already watched item is a no-op, except a movie or episode with a resume position from a rewatch: that records another play and clears the position. A season or series mark leaves such episodes alone. */
+    /** Mark an item watched for the acting profile; a season or series marks every episode. Marking an already watched item is a no-op, except a movie, episode or audiobook with a resume position from a rewatch: that records another play and clears the position. A season or series mark leaves such episodes alone. */
     post: operations["markWatched"];
     /** Mark an item unwatched for the acting profile; a season or series clears every episode. Clears the watched state and resume position and keeps watch history. Plays at or before the cutoff the server chooses when this request runs no longer count as watched. */
     delete: operations["unmarkWatched"];
@@ -12962,6 +12996,11 @@ export interface components {
       /** @description Opaque revision of this document */
       revision: string;
       /**
+       * @description Whether changePassword accepts sign_out_other_sessions. A server that omits this field rejects the member with 422, so send it only when this is true
+       * @example true
+       */
+      sign_out_other_sessions: boolean;
+      /**
        * @description Support and configuration state, not health
        * @enum {string}
        */
@@ -13253,6 +13292,8 @@ export interface components {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
       chatgpt_sign_in: boolean;
+      /** @description Service-tier choices for OpenAI API-key text providers. Default omits the upstream parameter; availability and pricing depend on the OpenAI model and account. */
+      openai_service_tiers?: string[];
       reasoning_levels: string[];
       /** @description Opaque revision of this document */
       revision: string;
@@ -13336,6 +13377,81 @@ export interface components {
       /** @description Custom providers only. */
       capabilities?: ("chat" | "embeddings" | "speech")[];
       name?: string;
+    };
+    AdminAPIClient: {
+      device_name: string;
+      device_platform: string;
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      first_hour: string;
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      last_hour: string;
+      /**
+       * Format: int64
+       * @description Most requests in one clock hour of the window.
+       */
+      peak_hour_requests: number;
+      /**
+       * Format: int64
+       * @description Requests answered 429 Too Many Requests by any rate limit.
+       */
+      refused: number;
+      /** Format: int64 */
+      requests: number;
+      /** @description False once the session was revoked, expired, or deleted. */
+      session_active: boolean;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      session_id: string;
+      /** @description The user agent the session sent most in its latest hour. */
+      user_agent: string;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      user_id: string;
+      username: string;
+    };
+    AdminAPIClientEndpoint: {
+      method: string;
+      /** Format: int64 */
+      refused: number;
+      /** Format: int64 */
+      requests: number;
+      /** @description The matched route pattern, or the path when no pattern was recorded. */
+      route: string;
+    };
+    AdminAPIClientEndpoints: {
+      endpoints: components["schemas"]["AdminAPIClientEndpoint"][];
+      /** Format: int64 */
+      hours: number;
+      /**
+       * @description Opaque identifier
+       * @example 1
+       */
+      session_id: string;
+    };
+    AdminAPIClients: {
+      clients: components["schemas"]["AdminAPIClient"][];
+      /**
+       * Format: date-time
+       * @description RFC 3339 instant in UTC with millisecond precision
+       */
+      from: string;
+      /** Format: int64 */
+      hours: number;
+      /**
+       * Format: int64
+       * @description API requests of every session in the window, for each client's share.
+       */
+      total_requests: number;
     };
     AdminAPIKey: {
       /**
@@ -14553,7 +14669,9 @@ export interface components {
     AdminDashboardCapabilities: {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
+      api_clients: boolean;
       downloads_stats: boolean;
+      egress_by_source: boolean;
       egress_totals: boolean;
       health: boolean;
       log_level_list: boolean;
@@ -14596,6 +14714,27 @@ export interface components {
        */
       user_id: string;
       username: string;
+    };
+    AdminDashboardEgressSource: {
+      /**
+       * Format: int64
+       * @description Data this source served over the whole window, integrated from every sampled minute like the window's egress_bytes. Rank sources by this rather than by the per-point split, which shows only each bucket's peak minute.
+       */
+      egress_bytes: number;
+      /** @description The key used in a point's egress_by_source: "api" or "node:<node_id>". */
+      key: string;
+      /**
+       * @description api is every API server process together; node is one stream node.
+       * @enum {string}
+       */
+      kind: "api" | "node";
+      /** @description Display name. A node deleted since it was sampled is named "Removed node <id>". */
+      name: string;
+      /**
+       * @description The stream node, for kind node.
+       * @example 1
+       */
+      node_id?: string;
     };
     AdminDashboardLayout: {
       layout: {
@@ -14676,6 +14815,8 @@ export interface components {
       download_egress_bytes: number;
       /** Format: int64 */
       egress_bytes: number;
+      /** @description Every source with samples in the window, which covers every key a point's egress_by_source uses; the API source first, then nodes by name. */
+      egress_sources: components["schemas"]["AdminDashboardEgressSource"][];
       /**
        * Format: date-time
        * @description RFC 3339 instant in UTC with millisecond precision
@@ -14700,6 +14841,10 @@ export interface components {
       direct: number;
       /** Format: int64 */
       download_egress_kbps: number;
+      /** @description egress_kbps split by egress_sources key, from the bucket's peak-egress minute. Egress no listed source accounts for, such as minutes sampled before per-source rows existed, is egress_kbps minus the sum of these values. */
+      egress_by_source: {
+        [key: string]: number;
+      };
       /** Format: int64 */
       egress_kbps: number;
       /** Format: int64 */
@@ -14922,7 +15067,7 @@ export interface components {
       /** @description Original validated client diagnostics manifest document, retaining its own schema_version and extension fields. */
       manifest: unknown;
       /** @enum {string} */
-      platform: "android" | "android-tv" | "ios" | "tvos";
+      platform: "android" | "android-tv" | "ios" | "tvos" | "roku";
       playback_session_ids: string[];
       profile_id?: string;
       /**
@@ -14961,7 +15106,7 @@ export interface components {
        */
       id: string;
       /** @enum {string} */
-      platform: "android" | "android-tv" | "ios" | "tvos";
+      platform: "android" | "android-tv" | "ios" | "tvos" | "roku";
       playback_session_ids: string[];
       profile_id?: string;
       /**
@@ -18638,9 +18783,44 @@ export interface components {
       ip_requests_per_minute: number;
       /** Format: double */
       ip_requests_per_second: number;
+      session_quota: components["schemas"]["AdminRateLimitSessionQuota"];
       tiers: {
         [key: string]: components["schemas"]["AdminRateLimitTier"];
       };
+    };
+    AdminRateLimitSessionQuota: {
+      /**
+       * Format: int64
+       * @description Requests the session's bucket holds when full.
+       */
+      burst: number;
+      /**
+       * @description off counts nothing; log counts and logs sessions over the quota but serves them; enforce refuses them with 429.
+       * @enum {string}
+       */
+      mode: "off" | "log" | "enforce";
+      /**
+       * Format: double
+       * @description Rate the session's bucket refills at.
+       */
+      requests_per_hour: number;
+    };
+    AdminRateLimitSessionQuotaUpdate: {
+      /**
+       * Format: int64
+       * @description Requests the session's bucket holds when full.
+       */
+      burst?: number;
+      /**
+       * @description off counts nothing; log counts and logs sessions over the quota but serves them; enforce refuses them with 429.
+       * @enum {string}
+       */
+      mode?: "off" | "log" | "enforce";
+      /**
+       * Format: double
+       * @description Rate the session's bucket refills at.
+       */
+      requests_per_hour?: number;
     };
     AdminRateLimitStatus: {
       active: boolean;
@@ -18677,6 +18857,7 @@ export interface components {
       ip_requests_per_minute?: number;
       /** Format: double */
       ip_requests_per_second?: number;
+      session_quota?: components["schemas"]["AdminRateLimitSessionQuotaUpdate"];
       tiers?: {
         [key: string]: components["schemas"]["AdminRateLimitTierUpdate"];
       };
@@ -18825,6 +19006,8 @@ export interface components {
       revision: string;
       /** @description Whether request routing is available: the routing rules under /admin/request-routes and the Standard/Advanced routing mode under /admin/request-routing */
       routing: boolean;
+      /** @description Whether series routing rules take series_statuses and exclude_series_statuses conditions. Send them only when true. With several API servers, add such conditions only once every server reports true: a server without them ignores them and routes as if the rule had none */
+      routing_series_status: boolean;
       /**
        * @description Support and configuration state, not health
        * @enum {string}
@@ -19079,6 +19262,14 @@ export interface components {
       exclude_original_languages?: string[];
       /** @description Match requests from none of these accounts */
       exclude_requester_user_ids?: number[];
+      /** @description Series only: match series whose status is none of these; a series with no TMDB status matches */
+      exclude_series_statuses?: (
+        | "returning"
+        | "in_production"
+        | "upcoming"
+        | "ended"
+        | "cancelled"
+      )[];
       /** @description TMDB genre IDs */
       genre_ids?: number[];
       /** @description TMDB keyword IDs */
@@ -19106,6 +19297,8 @@ export interface components {
       original_languages?: string[];
       /** @description Accounts whose requests the route applies to */
       requester_user_ids?: number[];
+      /** @description Series only: the series' status when the request was made, or, for a request made before Silo captured status, the first time it is routed while a rule checks status (TMDB's Pilot is in_production, Planned is upcoming). A series with no TMDB status matches none of them */
+      series_statuses?: ("returning" | "in_production" | "upcoming" | "ended" | "cancelled")[];
       /**
        * Format: int64
        * @description First release (or first-air) year, inclusive
@@ -19143,6 +19336,11 @@ export interface components {
       origin_countries: string[];
       /** @description The title's TMDB original-language code (ISO 639-1; TMDB also uses cn and xx) */
       original_language?: string;
+      /**
+       * @description A series' status as series_statuses names it (returning, in_production, upcoming, ended, cancelled), or a newer TMDB status in lower case; absent for a movie or a series with no TMDB status
+       * @example ended
+       */
+      series_status?: string;
       /** Format: int64 */
       year?: number;
     };
@@ -22584,6 +22782,11 @@ export interface components {
        * @example margin fossil quench hollow
        */
       new_password: string;
+      /**
+       * @description Also sign the account out everywhere except this session, in the same transaction: its other login sessions (including View as user sessions it opened or that view it), its Jellyfin- and Audiobookshelf-compatible sessions, and device sign-ins it approved that were not collected yet. API keys are kept. False or omitted signs nothing else out
+       * @example false
+       */
+      sign_out_other_sessions?: boolean;
     };
     ChatGPTAccountStatus: {
       client_id: string;
@@ -25661,6 +25864,12 @@ export interface components {
       include_items_max?: number;
       /** @description Opaque revision of this document */
       revision: string;
+      /**
+       * Format: int64
+       * @description The largest item_limit getHomeSectionItems and getHomeLayout accept: the section, or each section the layout includes, then answers at most that many cards. Absent when the home sections service is not configured, and on a server whose Home row reads take no item_limit
+       * @example 100
+       */
+      row_item_limit_max?: number;
       /**
        * Format: int64
        * @description The largest item_limit listHomeSections and listLibrarySections accept: each section then answers at most that many cards. Absent when the home sections service is not configured
@@ -30208,7 +30417,7 @@ export interface components {
        */
       clear_resume_position: boolean;
       /**
-       * @description Whether markWatched on a watched movie or episode that has a resume position (a rewatch in progress) records another play and clears the position; otherwise that mark is a no-op
+       * @description Whether markWatched on a watched movie, episode or audiobook that has a resume position (a rewatch in progress) records another play and clears the position; otherwise that mark is a no-op
        * @example true
        */
       mark_watched_records_rewatch: boolean;
@@ -31222,6 +31431,11 @@ export interface components {
       customized: boolean;
       /** @example false */
       featured: boolean;
+      /**
+       * @description The section holds more cards than items: reading it again without item_limit answers more. Sent only by getHomeSectionItems and getHomeLayout's included_sections when the request carried item_limit, and absent when false
+       * @example true
+       */
+      has_more?: boolean;
       /** @example recently_added */
       id: string;
       /** @example false */
@@ -80885,6 +81099,227 @@ export interface operations {
       };
     };
   };
+  getAdminDashboardAPIClients: {
+    parameters: {
+      query?: {
+        /** @description Window in hours: the last hours hours, read from the start of the hour the window begins in. */
+        hours?: number;
+        limit?: number;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminAPIClients"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getAdminDashboardAPIClientEndpoints: {
+    parameters: {
+      query?: {
+        /** @description Window in hours, up to the request. It reads one session's activity log rows, so it covers at most a day. */
+        hours?: number;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        session_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminAPIClientEndpoints"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   getAdminDashboardDownloadsStats: {
     parameters: {
       query?: {
@@ -110615,6 +111050,8 @@ export interface operations {
         image_size?: "small" | "medium" | "large" | "original";
         /** @description Also answer the cards of the first N sections in display order (featured sections count where they appear) in included_sections, saving a getHomeSectionItems call per row. 0 answers the layout alone. Send it only when getHomeCapabilities reports include_items_max; an older server rejects the parameter */
         include_items?: number;
+        /** @description Answer at most this many cards in each included section, exactly as getHomeSectionItems answers it with the same item_limit. The entries in sections keep each section's own item_limit. Absent keeps each section's own limit. Send it only when getHomeCapabilities reports row_item_limit_max; an older server rejects the parameter */
+        item_limit?: number;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
         logo_width?: number;
         /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
@@ -110855,6 +111292,8 @@ export interface operations {
         backdrop_width?: number;
         /** @description Artwork size for every image in the response; absent picks each surface's default */
         image_size?: "small" | "medium" | "large" | "original";
+        /** @description Answer at most this many cards: the section's item_limit becomes the smaller of its own and this value; total_count keeps its meaning. Absent keeps the section's own limit. Send it only when getHomeCapabilities reports row_item_limit_max; an older server rejects the parameter */
+        item_limit?: number;
         /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
         logo_width?: number;
         /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
@@ -144585,7 +145024,7 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description A movie, ebook, episode, season or series; a season or series expands to its episodes */
+        /** @description A movie, audiobook, ebook, episode, season or series; a season or series expands to its episodes */
         id: string;
       };
       cookie?: never;
@@ -144692,7 +145131,7 @@ export interface operations {
         "X-Profile-Token"?: string;
       };
       path: {
-        /** @description A movie, ebook, episode, season or series; a season or series expands to its episodes */
+        /** @description A movie, audiobook, ebook, episode, season or series; a season or series expands to its episodes */
         id: string;
       };
       cookie?: never;
