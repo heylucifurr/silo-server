@@ -51,7 +51,7 @@ type Title struct {
 	MediaType     string
 	TMDBID        int
 	IMDbID        string
-	TVDBID        string
+	TVDBID        int
 	Position      int
 	Title         string
 	OriginalTitle string
@@ -60,14 +60,17 @@ type Title struct {
 	Overview      string
 	// PosterPath, BackdropPath and LogoPath are TMDB path fragments, not
 	// asset-store keys.
-	PosterPath    string
-	BackdropPath  string
-	LogoPath      string
-	VoteAverage   float64
-	TrailerSite   string
-	TrailerKey    string
-	State         string
-	LastCheckedAt *time.Time
+	PosterPath     string
+	BackdropPath   string
+	LogoPath       string
+	VoteAverage    float64
+	Runtime        int
+	EpisodeRuntime int
+	Certification  string
+	TrailerSite    string
+	TrailerKey     string
+	State          string
+	LastCheckedAt  *time.Time
 }
 
 // Input is one admin-supplied entry in a whole-list replace.

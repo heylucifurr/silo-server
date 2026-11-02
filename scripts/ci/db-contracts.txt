@@ -630,6 +630,10 @@
 # leave out a collection whose members it can open none of (#2828).
 ./internal/api/handlers TestServerCollectionCountsFollowTheViewerDB
 
+# The curated anticipated list replaces, reorders and drops entries without
+# storing a catalog content id, keeping an existing entry's snapshot.
+./internal/anticipated TestAnticipatedStoreReplaceAndList
+
 # The household profile limit holds under concurrent creates (issue #2423).
 ./internal/api/handlers TestCreateProfileLimitConcurrentDB
 
