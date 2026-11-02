@@ -2110,6 +2110,13 @@ func newChiRouter(deps Dependencies) chi.Router {
 		}
 		if deps.HeroClips != nil {
 			sectionHandler.HeroClips = deps.HeroClips
+			// The same resolver serves the curated titles the library does not
+			// own, whose clips live in anticipated_clips. A resolver without the
+			// anticipated read leaves those slides without a clip, the ordinary
+			// case.
+			if anticipated, ok := deps.HeroClips.(handlers.AnticipatedHeroVideoURLSource); ok {
+				sectionHandler.AnticipatedClips = anticipated
+			}
 		}
 		sectionHandler.CollectionRepo = sectionFetcher.CollectionRepo
 		sectionHandler.FolderRepo = deps.FolderRepo

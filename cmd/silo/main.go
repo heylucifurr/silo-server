@@ -3254,7 +3254,15 @@ func main() {
 				Clips:      deps.Blobs.Assets,
 				FFmpegPath: func() string { return cfg.Playback.FFmpegPath },
 			}
-			taskMgr.Register(tasks.NewGenerateHeroClipsTask(heroClipRepo, heroClipGenerator, heroclips.NewRecipe(0)))
+			// The curated "Most Anticipated" titles the library does not own get
+			// their clips the same way, into anticipated_clips.
+			anticipatedClipGenerator := &heroclips.Generator{
+				Publisher:  heroclips.NewAnticipatedPublisher(deps.DB),
+				Clips:      deps.Blobs.Assets,
+				FFmpegPath: func() string { return cfg.Playback.FFmpegPath },
+			}
+			taskMgr.Register(tasks.NewGenerateHeroClipsTask(heroClipRepo, heroClipGenerator, heroclips.NewRecipe(0)).
+				WithAnticipated(heroClipRepo, anticipatedClipGenerator))
 			trickplayExtractor := trickplay.NewNodeExtractor(trickplay.NewLocalExtractor(settingsRepo), deps.NodePlanner, settingsRepo)
 			if trickplayService := trickplay.NewService(deps.DB, deps.Blobs.Assets, settingsRepo, trickplayExtractor, deps.NodeID); trickplayService != nil {
 				trickplayService.Start(appCtx)
@@ -4381,7 +4389,7 @@ func configureBlobStorage(ctx context.Context, mode string, cfg *config.Config, 
 	deps.ArtworkResolver = artworkurl.NewServerResolver(deps.ArtworkSigner)
 	// Hero clips are served through the same signing as artwork, with a longer
 	// lifetime: a clip plays for minutes and the element re-requests as it goes.
-	deps.HeroClips = heroclips.URLResolver{Clips: heroclips.NewRepository(deps.DB), Resolver: deps.ArtworkResolver}
+	deps.HeroClips = heroclips.URLResolver{Clips: heroclips.NewRepository(deps.DB), Anticipated: heroclips.NewRepository(deps.DB), Resolver: deps.ArtworkResolver}
 	deps.ArtworkDelivery = api.ArtworkDelivery{Scope: store.Identity()}
 	if direct, ok := store.(blobstore.DirectURLer); ok {
 		ttl := cfg.S3.MetadataPresignExpiry

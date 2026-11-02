@@ -38,9 +38,16 @@ func clipGroup(key string) (string, bool) {
 // No join on media_items is needed: hero_clips cascades from it, so a row whose
 // item is gone cannot exist, and an object left behind by a deleted item is
 // exactly what the sweep is for.
+//
+// The curated "Most Anticipated" clips share this namespace and this sweep, so
+// their table is the second liveness source: an anticipated_clips row keeps its
+// object alive exactly as a hero_clips row does. Those rows carry no catalog id
+// to cascade from, so the row itself is what says the object is wanted.
 func liveClipKeys(ctx context.Context, db blobgc.Querier, keys []string) (map[string]bool, error) {
 	rows, err := db.Query(ctx, `
-		SELECT clip_path FROM public.hero_clips WHERE clip_path = ANY($1::text[])`, keys)
+		SELECT clip_path FROM public.hero_clips WHERE clip_path = ANY($1::text[])
+		UNION
+		SELECT clip_path FROM public.anticipated_clips WHERE clip_path = ANY($1::text[])`, keys)
 	if err != nil {
 		return nil, fmt.Errorf("look up hero clips: %w", err)
 	}

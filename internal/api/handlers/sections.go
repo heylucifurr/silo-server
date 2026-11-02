@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"reflect"
 	"runtime/debug"
@@ -64,6 +65,10 @@ type SectionHandler struct {
 	// Optional: without it the cards carry no clip URL and the hero keeps its
 	// backdrop, which is how a server with no clips behaves anyway.
 	HeroClips HeroVideoURLSource
+	// AnticipatedClips resolves the clip of a curated "Most Anticipated" slide
+	// whose title the library does not own. Its clips live in anticipated_clips,
+	// keyed by the slide's synthetic id. Optional, like HeroClips.
+	AnticipatedClips AnticipatedHeroVideoURLSource
 }
 
 // HeroVideoURLSource resolves the clip URL of each of these items, keyed by
@@ -72,20 +77,42 @@ type HeroVideoURLSource interface {
 	HeroVideoURLs(ctx context.Context, contentIDs []string) (map[string]string, error)
 }
 
-// heroVideoURLs resolves the clips the cards in a row may play. A failure is
-// logged and dropped: the row then renders exactly as it did before hero clips
-// existed — backdrop, no clip.
+// AnticipatedHeroVideoURLSource is HeroVideoURLSource for unowned anticipated
+// slides, whose clips are published in anticipated_clips.
+type AnticipatedHeroVideoURLSource interface {
+	AnticipatedHeroVideoURLs(ctx context.Context, contentIDs []string) (map[string]string, error)
+}
+
+// heroVideoURLs resolves the clips the cards in a row may play, from both clip
+// stores: hero_clips for catalog titles and anticipated_clips for curated ones
+// the library does not own. The two id spaces are disjoint, so one map serves
+// both. A failure in either is logged and dropped: the row then renders exactly
+// as it did before hero clips existed — backdrop, no clip.
 func (h *SectionHandler) heroVideoURLs(ctx context.Context, contentIDs []string) map[string]string {
-	if h.HeroClips == nil || len(contentIDs) == 0 {
+	if len(contentIDs) == 0 || (h.HeroClips == nil && h.AnticipatedClips == nil) {
 		return nil
 	}
 
-	urls, err := h.HeroClips.HeroVideoURLs(ctx, contentIDs)
-	if err != nil {
-		slog.Log(ctx, ctxerr.LogLevel(ctx, err, slog.LevelWarn), "loading hero clips", "component", "api", "error", err)
+	urls := map[string]string{}
+	if h.HeroClips != nil {
+		got, err := h.HeroClips.HeroVideoURLs(ctx, contentIDs)
+		if err != nil {
+			slog.Log(ctx, ctxerr.LogLevel(ctx, err, slog.LevelWarn), "loading hero clips", "component", "api", "error", err)
+		} else {
+			maps.Copy(urls, got)
+		}
+	}
+	if h.AnticipatedClips != nil {
+		got, err := h.AnticipatedClips.AnticipatedHeroVideoURLs(ctx, contentIDs)
+		if err != nil {
+			slog.Log(ctx, ctxerr.LogLevel(ctx, err, slog.LevelWarn), "loading anticipated hero clips", "component", "api", "error", err)
+		} else {
+			maps.Copy(urls, got)
+		}
+	}
+	if len(urls) == 0 {
 		return nil
 	}
-
 	return urls
 }
 

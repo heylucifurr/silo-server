@@ -1,0 +1,72 @@
+package tasks
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/Silo-Server/silo-server/internal/heroclips"
+)
+
+type stubClipCandidates struct {
+	items []heroclips.Candidate
+	err   error
+	calls int
+}
+
+func (s *stubClipCandidates) ClipCandidates(context.Context, string, time.Duration, int) ([]heroclips.Candidate, error) {
+	s.calls++
+	return s.items, s.err
+}
+
+type stubClipGenerator struct {
+	made []string
+	err  error
+}
+
+func (s *stubClipGenerator) Create(_ context.Context, c heroclips.Candidate) error {
+	s.made = append(s.made, c.ContentID)
+	return s.err
+}
+
+func TestGenerateHeroClipsIncludesAnticipated(t *testing.T) {
+	owned := &stubClipCandidates{items: []heroclips.Candidate{{ContentID: "tvdb-372264"}}}
+	ownedGen := &stubClipGenerator{}
+	anticipated := &stubClipCandidates{items: []heroclips.Candidate{
+		{ContentID: heroclips.AnticipatedCandidateID("movie", 1083381)},
+	}}
+	anticipatedGen := &stubClipGenerator{}
+
+	task := NewGenerateHeroClipsTask(owned, ownedGen, heroclips.NewRecipe(0)).
+		WithAnticipated(anticipated, anticipatedGen)
+	if err := task.Execute(context.Background(), noopProgress{}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(ownedGen.made) != 1 || len(anticipatedGen.made) != 1 {
+		t.Fatalf("made = %v / %v, want one clip each", ownedGen.made, anticipatedGen.made)
+	}
+
+	// The catalog pass runs first, so a failure listing the curated titles still
+	// leaves the featured rows' clips made.
+	ownedGen.made = nil
+	broken := &stubClipCandidates{err: errors.New("boom")}
+	task = NewGenerateHeroClipsTask(owned, ownedGen, heroclips.NewRecipe(0)).
+		WithAnticipated(broken, &stubClipGenerator{})
+	if err := task.Execute(context.Background(), noopProgress{}); err == nil {
+		t.Fatal("Execute: want an error when the anticipated listing fails")
+	}
+	if len(ownedGen.made) != 1 {
+		t.Fatalf("the catalog pass did not finish first: %v", ownedGen.made)
+	}
+
+	// Without the second pass the task behaves exactly as it did before.
+	only := &stubClipGenerator{}
+	if err := NewGenerateHeroClipsTask(owned, only, heroclips.NewRecipe(0)).
+		Execute(context.Background(), noopProgress{}); err != nil {
+		t.Fatalf("Execute without anticipated: %v", err)
+	}
+	if len(only.made) != 1 {
+		t.Fatalf("made = %v, want the catalog candidate only", only.made)
+	}
+}

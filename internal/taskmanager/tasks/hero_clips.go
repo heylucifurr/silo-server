@@ -37,6 +37,19 @@ type GenerateHeroClipsTask struct {
 	candidates HeroClipCandidates
 	generator  HeroClipGenerator
 	recipe     heroclips.Recipe
+	// anticipatedCandidates and anticipatedGenerator run a second pass over the
+	// curated "Most Anticipated" titles the library does not own. Nil skips it.
+	anticipatedCandidates HeroClipCandidates
+	anticipatedGenerator  HeroClipGenerator
+}
+
+// WithAnticipated adds the pass over the curated titles the library does not own,
+// whose clips live in anticipated_clips rather than hero_clips. Returns the task
+// so wiring reads as one expression.
+func (t *GenerateHeroClipsTask) WithAnticipated(candidates HeroClipCandidates, generator HeroClipGenerator) *GenerateHeroClipsTask {
+	t.anticipatedCandidates = candidates
+	t.anticipatedGenerator = generator
+	return t
 }
 
 func NewGenerateHeroClipsTask(candidates HeroClipCandidates, generator HeroClipGenerator, recipe heroclips.Recipe) *GenerateHeroClipsTask {
@@ -86,7 +99,27 @@ func (t *GenerateHeroClipsTask) Execute(ctx context.Context, progress taskmanage
 		}
 	}
 
-	progress.Report(100, fmt.Sprintf("Checked %d featured titles", len(candidates)))
+	made := len(candidates)
+	if t.anticipatedCandidates != nil && t.anticipatedGenerator != nil {
+		anticipated, err := t.anticipatedCandidates.ClipCandidates(ctx, t.recipe.String(), heroClipRetryAfter, heroClipsPerRun)
+		if err != nil {
+			return fmt.Errorf("list anticipated clip candidates: %w", err)
+		}
+		for index, candidate := range anticipated {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			progress.Report(float64(index)*100/float64(len(anticipated)), fmt.Sprintf("Making a clip for %s", candidate.ContentID))
+			// The generator records its own failure and reports success, so one
+			// unreachable trailer does not stop the pass.
+			if err := t.anticipatedGenerator.Create(ctx, candidate); err != nil {
+				return fmt.Errorf("generate anticipated clip for %s: %w", candidate.ContentID, err)
+			}
+		}
+		made += len(anticipated)
+	}
+
+	progress.Report(100, fmt.Sprintf("Checked %d featured titles", made))
 
 	return nil
 }

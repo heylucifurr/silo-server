@@ -12,6 +12,12 @@ type ClipPathSource interface {
 	ClipPathsFor(ctx context.Context, contentIDs []string) (map[string]string, error)
 }
 
+// AnticipatedClipPathSource reads which curated titles have a published clip in
+// anticipated_clips, keyed by the slide's synthetic id.
+type AnticipatedClipPathSource interface {
+	AnticipatedClipPathsFor(ctx context.Context, contentIDs []string) (map[string]string, error)
+}
+
 // ClipURLTTL is how long a clip's URL has to stay good. A hero clip plays for
 // minutes and a media element re-requests as it plays, so the URL outlives the
 // artwork lifetime a poster is served with.
@@ -20,9 +26,13 @@ const ClipURLTTL = 12 * time.Hour
 // URLResolver turns published clips into URLs a client can fetch, through the
 // same signing the item's artwork goes through.
 type URLResolver struct {
-	Clips    ClipPathSource
-	Resolver artworkurl.Resolver
-	TTL      time.Duration
+	Clips ClipPathSource
+	// Anticipated reads clips for the curated titles the library does not own,
+	// keyed by their synthetic id. Nil leaves those slides without a clip, which
+	// is the ordinary case.
+	Anticipated AnticipatedClipPathSource
+	Resolver    artworkurl.Resolver
+	TTL         time.Duration
 }
 
 // HeroVideoURLs returns the URL of each item's clip, keyed by content id, for
@@ -32,11 +42,34 @@ type URLResolver struct {
 // A failure is the caller's to log and ignore: a hero without a clip is the
 // ordinary case, not an error.
 func (r URLResolver) HeroVideoURLs(ctx context.Context, contentIDs []string) (map[string]string, error) {
-	if r.Clips == nil || r.Resolver == nil || len(contentIDs) == 0 {
+	if r.Clips == nil {
+		return nil, nil
+	}
+	return r.sign(ctx, contentIDs, func() (map[string]string, error) {
+		return r.Clips.ClipPathsFor(ctx, contentIDs)
+	})
+}
+
+// AnticipatedHeroVideoURLs is HeroVideoURLs for an unowned anticipated slide,
+// whose clip lives in anticipated_clips rather than hero_clips. The ids are the
+// slide's synthetic ids, so the URL comes back under the key the card uses.
+func (r URLResolver) AnticipatedHeroVideoURLs(ctx context.Context, contentIDs []string) (map[string]string, error) {
+	if r.Anticipated == nil {
+		return nil, nil
+	}
+	return r.sign(ctx, contentIDs, func() (map[string]string, error) {
+		return r.Anticipated.AnticipatedClipPathsFor(ctx, contentIDs)
+	})
+}
+
+// sign turns the paths find returns into signed URLs, dropping any path that
+// cannot be signed.
+func (r URLResolver) sign(ctx context.Context, contentIDs []string, find func() (map[string]string, error)) (map[string]string, error) {
+	if r.Resolver == nil || len(contentIDs) == 0 {
 		return nil, nil
 	}
 
-	paths, err := r.Clips.ClipPathsFor(ctx, contentIDs)
+	paths, err := find()
 	if err != nil {
 		return nil, err
 	}

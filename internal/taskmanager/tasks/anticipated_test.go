@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -19,7 +20,8 @@ func (f *fakeAnticipatedRefresher) Refresh(context.Context, int) (int, error) {
 
 type noopProgress struct{}
 
-func (noopProgress) Report(float64, string) {}
+func (noopProgress) Report(float64, string)        {}
+func (noopProgress) SetResultData(json.RawMessage) {}
 
 func TestRefreshAnticipatedTaskRuns(t *testing.T) {
 	refresher := &fakeAnticipatedRefresher{refreshed: 2}

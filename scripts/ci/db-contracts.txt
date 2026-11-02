@@ -714,3 +714,7 @@
 # Personal collection list reads remember counts and collages with no source
 # until the membership revision or the viewer's access changes.
 ./internal/catalog TestPersonalCollectionReadsRememberedDB
+# An unowned anticipated title's clip: candidates skip a ready clip, a recipe
+# change rebuilds it, a failed clip does not resolve, and a failed retry keeps a
+# ready clip.
+./internal/heroclips TestAnticipatedClipCandidatesAndPathsDB
