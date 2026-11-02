@@ -124,6 +124,13 @@ type Fetcher struct {
 	// never calls the upstream provider.
 	TrendingSnapshots trendingSnapshotGetter
 
+	// Anticipated reads the admin-curated "Most Anticipated" list. Nil renders
+	// the anticipated row empty.
+	Anticipated anticipatedTitleReader
+	// AnticipatedResolver matches anticipated entries to library items by TMDB
+	// id, so an owned title renders as its catalog item and plays.
+	AnticipatedResolver externalIDResolver
+
 	// WatchlistPromoter moves the profile's entries for titles the library
 	// now has onto the library watchlist before the watchlist section reads
 	// it. Nil skips promotion.
@@ -1359,6 +1366,8 @@ func (f *Fetcher) userAgnosticSectionFetcher(t SectionType) userAgnosticSectionF
 		return f.fetchMostWatched
 	case SectionTrendingDiscover:
 		return f.fetchTrendingDiscover
+	case SectionAnticipated:
+		return f.fetchAnticipated
 	case SectionAdminCuratedList:
 		return f.fetchAdminCuratedList
 	case SectionShortWatches:

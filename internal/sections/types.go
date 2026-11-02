@@ -43,6 +43,8 @@ const (
 
 	SectionTrendingDiscover SectionType = "trending_discover"
 
+	SectionAnticipated SectionType = "anticipated"
+
 	SectionAdminCuratedList SectionType = "admin_curated_list"
 
 	SectionReturningShows SectionType = "returning_shows"
@@ -81,6 +83,7 @@ var ValidSectionTypes = map[SectionType]bool{
 	SectionNewToLibrary:        true,
 	SectionMostWatched:         true,
 	SectionTrendingDiscover:    true,
+	SectionAnticipated:         true,
 	SectionAdminCuratedList:    true,
 	SectionReturningShows:      true,
 	SectionGenreRoulette:       true,
