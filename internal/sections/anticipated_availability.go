@@ -22,6 +22,20 @@ func IsExternalContentID(contentID string) bool {
 	return strings.HasPrefix(contentID, ExternalContentIDPrefix)
 }
 
+// tmdbImageBase is TMDB's image CDN; an unowned anticipated title's artwork is
+// served straight from it, not from the asset store.
+const tmdbImageBase = "https://image.tmdb.org/t/p/"
+
+// TMDBImageURL composes a browser-loadable URL from a TMDB path fragment. An
+// empty path yields "", which a client reads as "no artwork".
+func TMDBImageURL(path, size string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return tmdbImageBase + size + path
+}
+
 // AnticipatedAvailability reports how an anticipated section item reads on the
 // hero at now: a real catalog item is in the library; a synthetic external item
 // is unreleased until its release date has passed, then released_unowned. An

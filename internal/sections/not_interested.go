@@ -16,7 +16,8 @@ func HidesNotInterested(sectionType SectionType) bool {
 	switch sectionType {
 	case SectionHiddenGems, SectionCriticallyAcclaimed, SectionAwardWinners, SectionForgottenFavorites,
 		SectionFormatShowcase, SectionEditorialSpotlight, SectionSeasonalThemed, SectionMoodCollection, SectionTrendingOnServer,
-		SectionMostWatched, SectionTrendingDiscover, SectionGenreRoulette, SectionAnniversaries, SectionShortWatches:
+		SectionMostWatched, SectionTrendingDiscover, SectionGenreRoulette, SectionAnniversaries, SectionShortWatches,
+		SectionAnticipated:
 		return true
 	default:
 		return false

@@ -452,6 +452,17 @@ type sectionItemResponse struct {
 	// internal/heroclips). json:"-" for the same reason as the advisory: the
 	// field exists on the Go struct only, and apiv2 emits it under its own name.
 	HeroVideoURL           string                 `json:"-"`
+	// Availability is how an anticipated slide reads: in_library, unreleased or
+	// released_unowned. Empty on every other row, and v2 emits it under its own
+	// name (json:"-").
+	Availability string `json:"-"`
+	// TMDBID identifies an unowned anticipated slide (poster and backdrop come
+	// from TMDB). Zero elsewhere.
+	TMDBID int `json:"-"`
+	// InWatchlist and Requestable carry the viewer's request state on an
+	// unowned anticipated slide. Nil elsewhere and when requests are off.
+	InWatchlist *bool `json:"-"`
+	Requestable *bool `json:"-"`
 	Status                 string                 `json:"status"`
 	ShowStatus             string                 `json:"show_status,omitempty"`
 	RatingIMDB             *float64               `json:"rating_imdb,omitempty"`
@@ -1923,6 +1934,19 @@ func (h *SectionHandler) toSectionItemResponse(sectionType sections.SectionType,
 		parent = meta.ParentArtwork
 	}
 	resp.ParentArtwork = episodeParentArtworkView(parent, imageURLs.parents)
+
+	// An unowned anticipated slide has no catalog row: its artwork comes from
+	// TMDB, and its availability tells the hero to offer Coming soon rather than
+	// Play. Everything else about the card is ordinary.
+	if sections.IsExternalContentID(item.ContentID) {
+		resp.Availability = sections.AnticipatedAvailability(item, time.Now())
+		if id, err := strconv.Atoi(item.TmdbID); err == nil {
+			resp.TMDBID = id
+		}
+		resp.PosterURL = sections.TMDBImageURL(item.PosterPath, "w342")
+		resp.BackdropURL = sections.TMDBImageURL(item.BackdropPath, "w780")
+		resp.LogoURL = sections.TMDBImageURL(item.LogoPath, "w300")
+	}
 
 	return resp
 }

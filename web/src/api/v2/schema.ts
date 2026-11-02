@@ -413,6 +413,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/anticipated": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the curated Most Anticipated list. */
+    get: operations["getAdminAnticipated"];
+    /** Replace the curated Most Anticipated list. */
+    put: operations["updateAdminAnticipated"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/anticipated/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Re-read every entry that is due from TMDB. */
+    post: operations["refreshAdminAnticipated"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/anticipated/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Search TMDB for titles to add to the curated list. */
+    post: operations["searchAdminAnticipated"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/api-keys": {
     parameters: {
       query?: never;
@@ -13378,6 +13430,112 @@ export interface components {
       capabilities?: ("chat" | "embeddings" | "speech")[];
       name?: string;
     };
+    AdminAnticipatedEntryBody: {
+      /**
+       * @example movie
+       * @enum {string}
+       */
+      media_type: "movie" | "series";
+      /**
+       * Format: int64
+       * @example 1083381
+       */
+      tmdb_id: number;
+    };
+    AdminAnticipatedList: {
+      /** @description In the admin's order. Empty, never null */
+      entries: components["schemas"]["AdminAnticipatedTitle"][];
+      /**
+       * Format: int64
+       * @description The most entries the list holds
+       * @example 50
+       */
+      max: number;
+    };
+    AdminAnticipatedRefreshOutputBody: {
+      /**
+       * Format: int64
+       * @description How many entries were re-read from TMDB
+       */
+      refreshed: number;
+    };
+    AdminAnticipatedSearchResult: {
+      backdrop_path?: string;
+      /**
+       * @example movie
+       * @enum {string}
+       */
+      media_type: "movie" | "series";
+      overview?: string;
+      poster_path?: string;
+      /** @example 2026-12-18 */
+      release_date?: string;
+      /** @example Avengers: Doomsday */
+      title: string;
+      /**
+       * Format: int64
+       * @example 1083381
+       */
+      tmdb_id: number;
+      /**
+       * Format: double
+       * @example 8.2
+       */
+      vote_average?: number;
+      /**
+       * Format: int64
+       * @example 2026
+       */
+      year?: number;
+    };
+    AdminAnticipatedTitle: {
+      /** @description TMDB image path fragment */
+      backdrop_path?: string;
+      /**
+       * @example movie
+       * @enum {string}
+       */
+      media_type: "movie" | "series";
+      overview?: string;
+      /**
+       * Format: int64
+       * @description The admin's order on the hero
+       * @example 0
+       */
+      position: number;
+      /** @description TMDB image path fragment */
+      poster_path?: string;
+      /**
+       * Format: date-time
+       * @description When the entry's metadata was last read from TMDB
+       */
+      refreshed_at?: string;
+      /**
+       * @description ISO date
+       * @example 2026-12-18
+       */
+      release_date?: string;
+      /** @enum {string} */
+      state: "active" | "needs_review" | "removed";
+      /** @example Avengers: Doomsday */
+      title: string;
+      /**
+       * Format: int64
+       * @example 1083381
+       */
+      tmdb_id: number;
+      /** @description The YouTube key the hero clip is cut from */
+      trailer_key?: string;
+      /**
+       * Format: int64
+       * @example 2026
+       */
+      year?: number;
+    };
+    AdminAnticipatedUpdateInputBody: {
+      /** @description The whole list, in the order the hero should show it */
+      entries: components["schemas"]["AdminAnticipatedEntryBody"][];
+    };
     AdminAPIClient: {
       device_name: string;
       device_platform: string;
@@ -21981,6 +22139,11 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card
+       * @enum {string}
+       */
+      availability?: "unreleased" | "released_unowned" | "in_library";
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -22009,6 +22172,8 @@ export interface components {
        * @description A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title
        */
       hero_video_url?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card */
+      in_watchlist?: boolean;
       /** @description On a continue-watching card: in_progress or next_up */
       item_source?: string;
       /** @description Empty, never null */
@@ -22080,6 +22245,8 @@ export interface components {
        * @example 1995-12-15
        */
       release_date?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off */
+      requestable?: boolean;
       /**
        * Format: int64
        * @description Minutes
@@ -22124,6 +22291,11 @@ export interface components {
       studios?: string[];
       /** @example Heat */
       title: string;
+      /**
+       * Format: int64
+       * @description On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card
+       */
+      tmdb_id?: number;
       /**
        * @description movie, series, season, episode, audiobook, ebook, podcast, podcast_episode
        * @example movie
@@ -22175,6 +22347,11 @@ export interface components {
       air_time?: string;
       air_timezone?: string;
       audiobook?: components["schemas"]["AudiobookDetailExtension"];
+      /**
+       * @description On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card
+       * @enum {string}
+       */
+      availability?: "unreleased" | "released_unowned" | "in_library";
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -22251,6 +22428,8 @@ export interface components {
        */
       hero_video_url?: string;
       imdb_id?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card */
+      in_watchlist?: boolean;
       intro?: components["schemas"]["Marker"];
       is_specials?: boolean;
       /** @description On a continue-watching card: in_progress or next_up */
@@ -22340,6 +22519,8 @@ export interface components {
        * @example 1995-12-15
        */
       release_date?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off */
+      requestable?: boolean;
       /**
        * Format: int64
        * @description Minutes
@@ -22397,7 +22578,11 @@ export interface components {
       thumb_url?: string;
       /** @example Heat */
       title: string;
-      tmdb_id?: string;
+      /**
+       * Format: int64
+       * @description On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card
+       */
+      tmdb_id?: number;
       tvdb_id?: string;
       /**
        * @description movie, series, season, episode, audiobook, ebook, podcast, podcast_episode
@@ -22878,6 +23063,12 @@ export interface components {
     CollectionAdminAccountProfile: {
       /** @description The page's items; empty, never null */
       items: components["schemas"]["AdminAccountProfile"][];
+      /** @description Cursor state; absent for bounded unpaginated collections */
+      page?: components["schemas"]["PageInfo"];
+    };
+    CollectionAdminAnticipatedSearchResult: {
+      /** @description The page's items; empty, never null */
+      items: components["schemas"]["AdminAnticipatedSearchResult"][];
       /** @description Cursor state; absent for bounded unpaginated collections */
       page?: components["schemas"]["PageInfo"];
     };
@@ -25375,6 +25566,11 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card
+       * @enum {string}
+       */
+      availability?: "unreleased" | "released_unowned" | "in_library";
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -25403,6 +25599,8 @@ export interface components {
        * @description A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title
        */
       hero_video_url?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card */
+      in_watchlist?: boolean;
       /** @description On a continue-watching card: in_progress or next_up */
       item_source?: string;
       /** @description Empty, never null */
@@ -25474,6 +25672,8 @@ export interface components {
        * @example 1995-12-15
        */
       release_date?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off */
+      requestable?: boolean;
       /**
        * Format: int64
        * @description Minutes
@@ -25518,6 +25718,11 @@ export interface components {
       studios?: string[];
       /** @example Heat */
       title: string;
+      /**
+       * Format: int64
+       * @description On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card
+       */
+      tmdb_id?: number;
       /**
        * @description movie, series, season, episode, audiobook, ebook, podcast, podcast_episode
        * @example movie
@@ -25856,6 +26061,8 @@ export interface components {
     HomeCapabilities: {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
+      /** @description Whether this server serves the anticipated Home row: an admin-curated Most Anticipated list of upcoming titles, rendered as the Coming Soon hero. Absent when the feature is not wired */
+      anticipated_supported?: boolean;
       /**
        * Format: int64
        * @description The largest include_items getHomeLayout accepts: the layout then also answers that many first sections with their cards in included_sections. Absent when the home sections service is not configured
@@ -34362,6 +34569,11 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card
+       * @enum {string}
+       */
+      availability?: "unreleased" | "released_unowned" | "in_library";
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -34392,6 +34604,8 @@ export interface components {
        * @description A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title
        */
       hero_video_url?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card */
+      in_watchlist?: boolean;
       /** @description On a continue-watching card: in_progress or next_up */
       item_source?: string;
       /** @description Empty, never null */
@@ -34463,6 +34677,8 @@ export interface components {
        * @example 1995-12-15
        */
       release_date?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off */
+      requestable?: boolean;
       /**
        * Format: int64
        * @description Minutes
@@ -34507,6 +34723,11 @@ export interface components {
       studios?: string[];
       /** @example Heat */
       title: string;
+      /**
+       * Format: int64
+       * @description On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card
+       */
+      tmdb_id?: number;
       /**
        * @description movie, series, season, episode, audiobook, ebook, podcast, podcast_episode
        * @example movie
@@ -34580,6 +34801,11 @@ export interface components {
        * @enum {string}
        */
       advisory_source?: "commonsense" | "mdblist";
+      /**
+       * @description On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card
+       * @enum {string}
+       */
+      availability?: "unreleased" | "released_unowned" | "in_library";
       /** @description Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable. */
       backdrop_is_episode_still?: boolean;
       backdrop_thumbhash?: string;
@@ -34608,6 +34834,8 @@ export interface components {
        * @description A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title
        */
       hero_video_url?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card */
+      in_watchlist?: boolean;
       /** @description On a continue-watching card: in_progress or next_up */
       item_source?: string;
       /** @description Empty, never null */
@@ -34679,6 +34907,8 @@ export interface components {
        * @example 1995-12-15
        */
       release_date?: string;
+      /** @description On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off */
+      requestable?: boolean;
       /**
        * Format: int64
        * @description Minutes
@@ -34723,6 +34953,11 @@ export interface components {
       studios?: string[];
       /** @example Heat */
       title: string;
+      /**
+       * Format: int64
+       * @description On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card
+       */
+      tmdb_id?: number;
       /**
        * @description movie, series, season, episode, audiobook, ebook, podcast, podcast_episode
        * @example movie
@@ -38531,6 +38766,492 @@ export interface operations {
       };
       /** @description Unsupported Media Type */
       415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getAdminAnticipated: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminAnticipatedList"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  updateAdminAnticipated: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The resource's current ETag, or "*" to overwrite deliberately. A missing field is 428 precondition_required; a stale tag is 412 precondition_failed with the current ETag. */
+        "If-Match": string;
+        /** @description Optional second precondition, evaluated after If-Match succeeds: "*" or any tag matching the current representation is 412 precondition_failed with the current ETag. */
+        "If-None-Match"?: string;
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdminAnticipatedUpdateInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminAnticipatedList"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  refreshAdminAnticipated: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminAnticipatedRefreshOutputBody"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  searchAdminAnticipated: {
+    parameters: {
+      query?: {
+        media_type?: "movie" | "series";
+        /** @description Part of a title */
+        q?: string;
+      };
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollectionAdminAnticipatedSearchResult"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
         headers: {
           [name: string]: unknown;
         };

@@ -56,6 +56,10 @@ type CatalogItem struct {
 	BackdropThumbhash      string                    `json:"backdrop_thumbhash,omitempty"`
 	LogoURL                string                    `json:"logo_url,omitempty" format:"uri-reference" doc:"Presigned, short-lived"`
 	HeroVideoURL           string                    `json:"hero_video_url,omitempty" format:"uri-reference" doc:"A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title"`
+	Availability           string                    `json:"availability,omitempty" enum:"unreleased,released_unowned,in_library" doc:"On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card"`
+	TMDBID                 int                       `json:"tmdb_id,omitempty" doc:"On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card"`
+	InWatchlist            *bool                     `json:"in_watchlist,omitempty" doc:"On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card"`
+	Requestable            *bool                     `json:"requestable,omitempty" doc:"On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off"`
 	MangaChapterCount      *int                      `json:"manga_chapter_count,omitempty"`
 	MangaVolumeCount       *int                      `json:"manga_volume_count,omitempty"`
 	OverlaySummary         *CatalogItemOverlay       `json:"overlay_summary,omitempty" doc:"Technical badges of the best file"`
@@ -209,6 +213,7 @@ func catalogItemOfSection(v handlers.SectionItemView, sel ratingsources.Selectio
 		SeasonPosterURL: v.ParentArtwork.SeasonPosterURL, SeasonPosterThumbhash: v.ParentArtwork.SeasonPosterThumbhash,
 		OverlaySummary: catalogOverlayOf(v.OverlaySummary), Badges: v.Badges, ItemSource: v.ItemSource, UserState: catalogUserStateOf(v.UserState),
 		HeroVideoURL:               v.HeroVideoURL,
+		Availability:               v.Availability, TMDBID: v.TMDBID, InWatchlist: v.InWatchlist, Requestable: v.Requestable,
 		PendingTranslationLanguage: v.PendingTranslationLanguage, MachineTranslatedFields: v.MachineTranslatedFields,
 	}
 	if e := v.UpcomingEvent; e != nil {

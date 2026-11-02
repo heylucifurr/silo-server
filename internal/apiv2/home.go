@@ -111,6 +111,10 @@ type HomeCapabilities struct {
 	IncludeItemsMax     int `json:"include_items_max,omitzero" doc:"The largest include_items getHomeLayout accepts: the layout then also answers that many first sections with their cards in included_sections. Absent when the home sections service is not configured" example:"4"`
 	SectionItemLimitMax int `json:"section_item_limit_max,omitzero" doc:"The largest item_limit listHomeSections and listLibrarySections accept: each section then answers at most that many cards. Absent when the home sections service is not configured" example:"100"`
 	RowItemLimitMax     int `json:"row_item_limit_max,omitzero" doc:"The largest item_limit getHomeSectionItems and getHomeLayout accept: the section, or each section the layout includes, then answers at most that many cards. Absent when the home sections service is not configured, and on a server whose Home row reads take no item_limit" example:"100"`
+	// AnticipatedSupported reports whether the anticipated Home row (the
+	// admin-curated Most Anticipated list) is served. A client offers the row
+	// only when this is true.
+	AnticipatedSupported bool `json:"anticipated_supported,omitzero" doc:"Whether this server serves the anticipated Home row: an admin-curated Most Anticipated list of upcoming titles, rendered as the Coming Soon hero. Absent when the feature is not wired"`
 }
 
 // HomeCapabilitiesOutput is the getHomeCapabilities response.
@@ -445,6 +449,7 @@ func (reg *Registry) getHomeCapabilities(_ context.Context, _ *CapabilityInput) 
 		IncludeItemsMax:     handlers.MaxHomeLayoutIncludedSections,
 		SectionItemLimitMax: handlers.MaxSectionItemLimitCap,
 		RowItemLimitMax:     handlers.MaxSectionItemLimitCap,
+		AnticipatedSupported: reg.deps.Anticipated != nil,
 	}}, nil
 }
 

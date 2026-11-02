@@ -24528,6 +24528,15 @@
             ],
             "type": "string"
           },
+          "availability": {
+            "description": "On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card",
+            "enum": [
+              "unreleased",
+              "released_unowned",
+              "in_library"
+            ],
+            "type": "string"
+          },
           "backdrop_is_episode_still": {
             "description": "Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable.",
             "type": "boolean"
@@ -24579,6 +24588,10 @@
             "description": "A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title",
             "format": "uri-reference",
             "type": "string"
+          },
+          "in_watchlist": {
+            "description": "On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card",
+            "type": "boolean"
           },
           "item_source": {
             "description": "On a continue-watching card: in_progress or next_up",
@@ -24698,6 +24711,10 @@
             "format": "date",
             "type": "string"
           },
+          "requestable": {
+            "description": "On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off",
+            "type": "boolean"
+          },
           "runtime": {
             "description": "Minutes",
             "examples": [
@@ -24770,6 +24787,11 @@
               "Heat"
             ],
             "type": "string"
+          },
+          "tmdb_id": {
+            "description": "On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card",
+            "format": "int64",
+            "type": "integer"
           },
           "type": {
             "description": "movie, series, season, episode, audiobook, ebook, podcast, podcast_episode",
@@ -24879,6 +24901,15 @@
           },
           "audiobook": {
             "$ref": "#/components/schemas/AudiobookDetailExtension"
+          },
+          "availability": {
+            "description": "On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card",
+            "enum": [
+              "unreleased",
+              "released_unowned",
+              "in_library"
+            ],
+            "type": "string"
           },
           "backdrop_is_episode_still": {
             "description": "Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable.",
@@ -25037,6 +25068,10 @@
           },
           "imdb_id": {
             "type": "string"
+          },
+          "in_watchlist": {
+            "description": "On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card",
+            "type": "boolean"
           },
           "intro": {
             "$ref": "#/components/schemas/Marker"
@@ -25207,6 +25242,10 @@
             "format": "date",
             "type": "string"
           },
+          "requestable": {
+            "description": "On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off",
+            "type": "boolean"
+          },
           "runtime": {
             "description": "Minutes",
             "examples": [
@@ -25309,7 +25348,9 @@
             "type": "string"
           },
           "tmdb_id": {
-            "type": "string"
+            "description": "On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card",
+            "format": "int64",
+            "type": "integer"
           },
           "tvdb_id": {
             "type": "string"
@@ -33116,6 +33157,15 @@
             ],
             "type": "string"
           },
+          "availability": {
+            "description": "On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card",
+            "enum": [
+              "unreleased",
+              "released_unowned",
+              "in_library"
+            ],
+            "type": "string"
+          },
           "backdrop_is_episode_still": {
             "description": "Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable.",
             "type": "boolean"
@@ -33167,6 +33217,10 @@
             "description": "A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title",
             "format": "uri-reference",
             "type": "string"
+          },
+          "in_watchlist": {
+            "description": "On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card",
+            "type": "boolean"
           },
           "item_source": {
             "description": "On a continue-watching card: in_progress or next_up",
@@ -33286,6 +33340,10 @@
             "format": "date",
             "type": "string"
           },
+          "requestable": {
+            "description": "On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off",
+            "type": "boolean"
+          },
           "runtime": {
             "description": "Minutes",
             "examples": [
@@ -33358,6 +33416,11 @@
               "Heat"
             ],
             "type": "string"
+          },
+          "tmdb_id": {
+            "description": "On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card",
+            "format": "int64",
+            "type": "integer"
           },
           "type": {
             "description": "movie, series, season, episode, audiobook, ebook, podcast, podcast_episode",
@@ -34037,6 +34100,10 @@
         "properties": {
           "allowed": {
             "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "anticipated_supported": {
+            "description": "Whether this server serves the anticipated Home row: an admin-curated Most Anticipated list of upcoming titles, rendered as the Coming Soon hero. Absent when the feature is not wired",
             "type": "boolean"
           },
           "include_items_max": {
@@ -54137,6 +54204,15 @@
             ],
             "type": "string"
           },
+          "availability": {
+            "description": "On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card",
+            "enum": [
+              "unreleased",
+              "released_unowned",
+              "in_library"
+            ],
+            "type": "string"
+          },
           "backdrop_is_episode_still": {
             "description": "Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable.",
             "type": "boolean"
@@ -54195,6 +54271,10 @@
             "description": "A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title",
             "format": "uri-reference",
             "type": "string"
+          },
+          "in_watchlist": {
+            "description": "On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card",
+            "type": "boolean"
           },
           "item_source": {
             "description": "On a continue-watching card: in_progress or next_up",
@@ -54314,6 +54394,10 @@
             "format": "date",
             "type": "string"
           },
+          "requestable": {
+            "description": "On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off",
+            "type": "boolean"
+          },
           "runtime": {
             "description": "Minutes",
             "examples": [
@@ -54386,6 +54470,11 @@
               "Heat"
             ],
             "type": "string"
+          },
+          "tmdb_id": {
+            "description": "On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card",
+            "format": "int64",
+            "type": "integer"
           },
           "type": {
             "description": "movie, series, season, episode, audiobook, ebook, podcast, podcast_episode",
@@ -54542,6 +54631,15 @@
             ],
             "type": "string"
           },
+          "availability": {
+            "description": "On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card",
+            "enum": [
+              "unreleased",
+              "released_unowned",
+              "in_library"
+            ],
+            "type": "string"
+          },
           "backdrop_is_episode_still": {
             "description": "Whether backdrop_url is an episode still. False for series artwork; absent when provenance is unavailable.",
             "type": "boolean"
@@ -54593,6 +54691,10 @@
             "description": "A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title",
             "format": "uri-reference",
             "type": "string"
+          },
+          "in_watchlist": {
+            "description": "On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card",
+            "type": "boolean"
           },
           "item_source": {
             "description": "On a continue-watching card: in_progress or next_up",
@@ -54712,6 +54814,10 @@
             "format": "date",
             "type": "string"
           },
+          "requestable": {
+            "description": "On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off",
+            "type": "boolean"
+          },
           "runtime": {
             "description": "Minutes",
             "examples": [
@@ -54784,6 +54890,11 @@
               "Heat"
             ],
             "type": "string"
+          },
+          "tmdb_id": {
+            "description": "On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card",
+            "format": "int64",
+            "type": "integer"
           },
           "type": {
             "description": "movie, series, season, episode, audiobook, ebook, podcast, podcast_episode",
