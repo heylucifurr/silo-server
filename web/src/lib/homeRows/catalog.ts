@@ -111,6 +111,11 @@ const ROW_KINDS: Record<string, RowKind> = {
     label: "Trending worldwide",
     sentence: "Popular on TMDB, from titles you have.",
   },
+  anticipated: {
+    group: "popular",
+    label: "Most anticipated",
+    sentence: "Upcoming titles you don't have yet.",
+  },
   profile_activity_feed: {
     group: "popular",
     label: "What others just watched",

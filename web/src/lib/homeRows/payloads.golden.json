@@ -1,5 +1,24 @@
 {
   "adminCreate": {
+    "anticipated/anticipated_default/home": {
+      "scope": "home",
+      "section_type": "anticipated",
+      "title": "Most Anticipated",
+      "featured": false,
+      "item_limit": 20,
+      "config": {},
+      "enabled": true
+    },
+    "anticipated/anticipated_default/library": {
+      "scope": "library",
+      "library_id": "7",
+      "section_type": "anticipated",
+      "title": "Most Anticipated",
+      "featured": false,
+      "item_limit": 20,
+      "config": {},
+      "enabled": true
+    },
     "critically_acclaimed/ca_imdb/home": {
       "scope": "home",
       "section_type": "critically_acclaimed",
