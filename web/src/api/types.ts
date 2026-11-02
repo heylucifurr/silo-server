@@ -4522,6 +4522,17 @@ export interface SectionItem {
   pending_translation_language?: string;
   /** Localized fields whose text was machine-translated by AI. */
   machine_translated_fields?: string[];
+  /** The title's release date, when the card carries one. */
+  release_date?: string | null;
+  /**
+   * Present only on a curated "Most Anticipated" slide whose title the library
+   * does not own: `unreleased` offers Coming soon, `released_unowned` a Request,
+   * and `in_library` means the library has it and the slide plays. Undefined on
+   * every other card.
+   */
+  availability?: "unreleased" | "released_unowned" | "in_library";
+  /** The curated slide's TMDB id, for its title page. Undefined on every other card. */
+  tmdb_id?: number;
 }
 
 export interface ResolvedSection {

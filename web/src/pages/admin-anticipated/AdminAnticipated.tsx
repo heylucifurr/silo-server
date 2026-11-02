@@ -66,7 +66,11 @@ export default function AdminAnticipated() {
       const next = [...current];
       const target = index + by;
       if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
+      const moved = next[index];
+      const displaced = next[target];
+      if (moved === undefined || displaced === undefined) return current;
+      next[index] = displaced;
+      next[target] = moved;
       return next;
     });
   }

@@ -88,6 +88,11 @@ export function catalogItemFromV2(item: CatalogItemV2): CatalogCardItem {
     hero_video_url: item.hero_video_url,
     added_at: item.added_at,
     release_date: item.release_date,
+    // A curated "Most Anticipated" slide the library does not own carries both of
+    // these; every other card has neither. The hero reads their presence to offer
+    // Coming soon instead of Play, so dropping them here silently breaks it.
+    availability: item.availability,
+    tmdb_id: item.tmdb_id,
     last_air_date: item.last_air_date,
     overlay_summary: item.overlay_summary,
     sort_metrics: item.sort_metrics,
@@ -291,7 +296,7 @@ export function catalogItemDetailFromV2(item: CatalogItemDetailV2): ItemDetail {
     rating_rt_audience: item.rating_rt_audience ?? null,
     ratings: item.ratings,
     imdb_id: item.imdb_id ?? "",
-    tmdb_id: item.tmdb_id ?? "",
+    tmdb_id: String(item.tmdb_id ?? ""),
     tvdb_id: item.tvdb_id ?? "",
     cast: item.cast.map(castMemberFromV2),
     crew: item.crew.map(crewMemberFromV2),
