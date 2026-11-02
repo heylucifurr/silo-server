@@ -111,6 +111,7 @@ const AdminSettingsLayout = lazy(() => import("@/pages/admin-settings/AdminSetti
 const AdminNodes = lazy(() => import("@/pages/AdminNodes"));
 const AdminDownloads = lazy(() => import("@/pages/AdminDownloads"));
 const AdminHomeRows = lazy(() => import("@/pages/AdminHomeRows"));
+const AdminAnticipated = lazy(() => import("@/pages/admin-anticipated/AdminAnticipated"));
 const AdminRequestDiscover = lazy(() => import("@/pages/AdminRequestDiscover"));
 const AdminCollections = lazy(() => import("@/pages/AdminCollections"));
 const AdminPlaybackHistory = lazy(() => import("@/pages/AdminPlaybackHistory"));
@@ -516,6 +517,7 @@ function AppRoutes() {
                   <Route path="nodes" element={<AdminNodes />} />
                   <Route path="downloads" element={<AdminDownloads />} />
                   <Route path="sections" element={<AdminHomeRows />} />
+                  <Route path="anticipated" element={<AdminAnticipated />} />
                   <Route path="home-rows" element={<LegacyAdminHomeRowsRedirect />} />
                   <Route path="plugins" element={<AdminPlugins />} />
                   <Route path="plugins/:pluginId" element={<AdminPluginDetail />} />
