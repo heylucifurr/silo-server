@@ -633,6 +633,10 @@
 # The curated anticipated list replaces, reorders and drops entries without
 # storing a catalog content id, keeping an existing entry's snapshot.
 ./internal/anticipated TestAnticipatedStoreReplaceAndList
+# The curation service resolves a new entry once, and a failed refresh keeps the
+# last good snapshot.
+./internal/anticipated TestServiceReplaceResolvesNewEntries
+./internal/anticipated TestServiceRefreshKeepsLastGoodSnapshotOnError
 
 # The household profile limit holds under concurrent creates (issue #2423).
 ./internal/api/handlers TestCreateProfileLimitConcurrentDB
