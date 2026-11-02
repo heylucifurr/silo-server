@@ -1452,6 +1452,41 @@ func externalIDsPath(mediaType string, id int) (string, error) {
 	}
 }
 
+func videosPath(mediaType string, id int) (string, error) {
+	switch mediaType {
+	case "movie":
+		return fmt.Sprintf("/movie/%d/videos", id), nil
+	case "tv":
+		return fmt.Sprintf("/tv/%d/videos", id), nil
+	default:
+		return "", fmt.Errorf("tmdb: invalid media type: %q", mediaType)
+	}
+}
+
+// Videos returns a title's videos (trailers, teasers, clips). Sites are
+// lower-cased. A title with none returns an empty slice and no error.
+func (c *Client) Videos(ctx context.Context, mediaType string, id int) ([]Video, error) {
+	path, err := videosPath(mediaType, id)
+	if err != nil {
+		return nil, err
+	}
+	var resp videosResponse
+	if err := c.doGet(ctx, path, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]Video, 0, len(resp.Results))
+	for _, v := range resp.Results {
+		out = append(out, Video{
+			Site:     strings.ToLower(strings.TrimSpace(v.Site)),
+			Key:      strings.TrimSpace(v.Key),
+			Name:     v.Name,
+			Type:     v.Type,
+			Official: v.Official,
+		})
+	}
+	return out, nil
+}
+
 func cloneExternalIDs(ids *ExternalIDs) *ExternalIDs {
 	if ids == nil {
 		return nil

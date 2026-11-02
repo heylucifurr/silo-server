@@ -428,3 +428,60 @@ type tvDetailResponse struct {
 	Recommendations *recommendationsTVResponse `json:"recommendations"`
 	ContentRatings  *contentRatingsResponse    `json:"content_ratings"`
 }
+
+// videosResponse is the wire format of /movie/{id}/videos and /tv/{id}/videos.
+type videosResponse struct {
+	Results []videoEntry `json:"results"`
+}
+
+type videoEntry struct {
+	Site     string `json:"site"`
+	Key      string `json:"key"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Official bool   `json:"official"`
+}
+
+// Video is one TMDB video (trailer, teaser, clip…) for a title. Site is
+// lower-cased ("youtube").
+type Video struct {
+	Site     string
+	Key      string
+	Name     string
+	Type     string
+	Official bool
+}
+
+// SiteYouTube is the only video site a hero clip can be cut from today.
+const SiteYouTube = "youtube"
+
+// BestTrailer picks the video a hero clip should be cut from, or ("", "") when
+// the title has none: an official YouTube Trailer, else any YouTube Trailer,
+// else any YouTube video.
+func BestTrailer(videos []Video) (site, key string) {
+	var anyTrailer, anyVideo Video
+	var haveTrailer, haveVideo bool
+	for _, v := range videos {
+		if v.Site != SiteYouTube || v.Key == "" {
+			continue
+		}
+		if !haveVideo {
+			anyVideo, haveVideo = v, true
+		}
+		if v.Type == "Trailer" {
+			if v.Official {
+				return v.Site, v.Key
+			}
+			if !haveTrailer {
+				anyTrailer, haveTrailer = v, true
+			}
+		}
+	}
+	if haveTrailer {
+		return anyTrailer.Site, anyTrailer.Key
+	}
+	if haveVideo {
+		return anyVideo.Site, anyVideo.Key
+	}
+	return "", ""
+}
