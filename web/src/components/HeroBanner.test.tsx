@@ -806,13 +806,17 @@ describe("HeroBanner title art", () => {
 
     expect(container.querySelector('img[src="/logo.webp"]')).toBeNull();
     expect(screen.getByTestId("hero-title-pending")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Featured Movie" })).toHaveClass("sr-only");
+    expect(screen.getByRole("heading", { level: 1, name: "Featured Movie" })).toHaveClass(
+      "sr-only",
+    );
 
     titleArt.show = true;
     rerender(hero({ items: [movieSlide({ logo_url: "/logo.webp" })] }));
 
     expect(container.querySelector('img[src="/logo.webp"]')).not.toBeNull();
-    expect(screen.getByRole("heading", { level: 1, name: "Featured Movie" })).toHaveClass("sr-only");
+    expect(screen.getByRole("heading", { level: 1, name: "Featured Movie" })).toHaveClass(
+      "sr-only",
+    );
   });
 
   it("falls back to the text title without a logo, and when one fails to load", () => {
@@ -840,6 +844,83 @@ describe("HeroBanner title art", () => {
     expect(container.querySelector('img[src="/logo.webp"]')).toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "Featured Movie" })).not.toHaveClass(
       "sr-only",
+    );
+  });
+});
+
+/*
+ * A curated "Most Anticipated" slide whose title the library does not own has no
+ * catalog item: it offers Coming soon (with the release date) or a Request, and
+ * its More Info opens the external title page rather than an item page.
+ */
+describe("an anticipated slide", () => {
+  // The hero reads prefers-reduced-motion on mount; jsdom has no matchMedia.
+  beforeEach(() => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: false,
+        media: "",
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    );
+  });
+
+  it("offers Coming soon with its release date instead of Play", () => {
+    const item = movieSlide({
+      content_id: "ext:movie-1083381",
+      tmdb_id: 1083381,
+      availability: "unreleased",
+      release_date: "2026-12-18",
+    });
+    render(hero({ items: [item] }));
+
+    expect(screen.getByText(/Coming soon/)).toBeVisible();
+    expect(screen.getByText(/2026/)).toBeVisible();
+    expect(screen.queryByRole("link", { name: /play/i })).not.toBeInTheDocument();
+  });
+
+  it("offers a Request once the title is out, and More Info opens the title page", () => {
+    const item = movieSlide({
+      content_id: "ext:movie-603",
+      tmdb_id: 603,
+      availability: "released_unowned",
+      release_date: "2026-01-01",
+    });
+    render(hero({ items: [item] }));
+
+    expect(screen.getByRole("link", { name: "Request" })).toHaveAttribute(
+      "href",
+      "/title/movie/603",
+    );
+    expect(screen.getByRole("link", { name: /More Info/ })).toHaveAttribute(
+      "href",
+      "/title/movie/603",
+    );
+    expect(screen.queryByText(/Coming soon/)).not.toBeInTheDocument();
+  });
+
+  it("keeps Play for an anticipated title the library now has", () => {
+    const item = movieSlide({ content_id: "movie-1", availability: "in_library" });
+    render(hero({ items: [item] }));
+
+    expect(screen.queryByText(/Coming soon/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /play/i })).toBeInTheDocument();
+  });
+
+  it("leaves every other row exactly as it was", () => {
+    render(hero({ items: [movieSlide()] }));
+
+    expect(screen.queryByText(/Coming soon/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Request" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /More Info/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/item/"),
     );
   });
 });

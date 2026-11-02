@@ -17,6 +17,8 @@ import {
   Play,
   Pause,
   BookOpen,
+  Calendar,
+  Download,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -165,6 +167,14 @@ const HeroBackdropSlide = memo(function HeroBackdropSlide({
     </div>
   );
 });
+
+/** A slide's release date as "18 Dec 2026", or "" when there is none. */
+function formatHeroReleaseDate(value: string | undefined): string {
+  if (!value) return "";
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 export default function HeroBanner({
   items,
@@ -516,6 +526,23 @@ export default function HeroBanner({
     libraryId,
   });
 
+  /*
+   * A curated "Most Anticipated" slide whose title the library does not own has
+   * no catalog item to play and no item page to open. It offers Coming soon with
+   * its release date, or a Request once the title is out, and its More Info goes
+   * to the external title page Discover uses. `availability` is absent on every
+   * other card, so every existing row keeps Play exactly as before.
+   */
+  const availability = current?.availability;
+  const unowned = availability !== undefined && availability !== "in_library";
+  const releasedUnowned = availability === "released_unowned";
+  const comingSoonDate = formatHeroReleaseDate(current?.release_date);
+  const comingSoonLabel = comingSoonDate ? `Coming soon · ${comingSoonDate}` : "Coming soon";
+  const titleHref =
+    current?.tmdb_id != null
+      ? `/title/${encodeURIComponent(current.type)}/${current.tmdb_id}`
+      : buildItemHref({ contentId: current.content_id, libraryId });
+
   const handlePlayClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (activeAudiobookPlaying == null) {
       // This Play link navigates without the playback controller, so it
@@ -677,22 +704,39 @@ export default function HeroBanner({
               />
             </Suspense>
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                to={playHref}
-                onClick={handlePlayClick}
-                className="pill pill-primary transition-colors duration-(--duration-fast)"
-              >
-                {current.type === "ebook" ? (
-                  <BookOpen className="h-4 w-4" />
-                ) : activeAudiobookPlaying ? (
-                  <Pause className="h-4 w-4 fill-current" />
+              {unowned ? (
+                releasedUnowned ? (
+                  <ViewTransitionLink
+                    to={titleHref}
+                    className="pill pill-primary transition-colors duration-(--duration-fast)"
+                  >
+                    <Download className="h-4 w-4" />
+                    Request
+                  </ViewTransitionLink>
                 ) : (
-                  <Play className="h-4 w-4 fill-current" />
-                )}
-                {playLabel}
-              </Link>
+                  <span className="pill pill-glass cursor-default">
+                    <Calendar className="h-4 w-4" />
+                    {comingSoonLabel}
+                  </span>
+                )
+              ) : (
+                <Link
+                  to={playHref}
+                  onClick={handlePlayClick}
+                  className="pill pill-primary transition-colors duration-(--duration-fast)"
+                >
+                  {current.type === "ebook" ? (
+                    <BookOpen className="h-4 w-4" />
+                  ) : activeAudiobookPlaying ? (
+                    <Pause className="h-4 w-4 fill-current" />
+                  ) : (
+                    <Play className="h-4 w-4 fill-current" />
+                  )}
+                  {playLabel}
+                </Link>
+              )}
               <ViewTransitionLink
-                to={buildItemHref({ contentId: current.content_id, libraryId })}
+                to={titleHref}
                 className="pill pill-glass transition-colors duration-(--duration-fast)"
               >
                 <Info className="h-4 w-4" />
