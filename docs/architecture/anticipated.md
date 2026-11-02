@@ -89,11 +89,46 @@ only when the server serves it.
 The row is a discovery row, so it honours a profile's Not interested marks
 (`HidesNotInterested`), which matters for entries the library owns.
 
+## Trailer motion
+
+`anticipated_clips` (`20261102012437_anticipated_clips.sql`) is the unowned
+titles' twin of `hero_clips`: same recipe, same `hero-clips/` object namespace,
+keyed by `(media_type, tmdb_id)` because there is no catalog item to cascade
+from. `heroclips.AnticipatedCandidateID` builds the candidate identity
+(`ext:<media_type>-<tmdb_id>`), deliberately the same string
+`sections.ExternalContentID` builds for the slide, so a clip and the card that
+plays it share one id; a test in `internal/api/handlers` pins the two together.
+
+`GenerateHeroClipsTask` runs a second pass over those candidates after the
+featured rows' pass, publishing through `AnticipatedPublisher` instead of the
+catalog repository. The same publish-last invariant holds, and a failed retry
+never clears a clip that is already ready.
+
+Delivery merges both stores: `SectionHandler.heroVideoURLs` asks `hero_clips` for
+catalog ids and `anticipated_clips` for synthetic ones, and the two id spaces are
+disjoint, so one map carries both. `blobgc` reads `anticipated_clips` as a second
+liveness source for the shared `hero-clips/` namespace, or the sweep would
+collect every anticipated clip.
+
+## The web client
+
+The hero renders an unowned slide from `availability` alone (never from the id
+prefix): `unreleased` shows a "Coming soon · <date>" badge, `released_unowned` a
+Request, and both point More Info at the external title page
+(`/title/<media_type>/<tmdb_id>`) rather than an item page. Every other card is
+unchanged.
+
+Admin → Anticipated (`/admin/anticipated`) is the curation page: TMDB search to
+add, remove, reorder, and one whole-list save guarded by the ETag the page read,
+with a conflict banner on 412.
+
 ## Not built yet
 
-Trailer motion for an unowned slide. `anticipated_clips`
-(`20261102012437_anticipated_clips.sql`) and its migration exist, and the table
-follows `hero_clips` (same recipe, same `hero-clips/` object namespace), but the
-candidate query, publisher, task wiring, `hero_video_url` delivery and `blobgc`
-liveness are not implemented, so an unowned slide keeps its backdrop. The web
-client renders the hero slide and the admin curation page are likewise pending.
+- An entry on the admin sidebar for the curation page (the route works; nothing
+  links to it yet).
+- The `in_watchlist` and `requestable` members are on the wire and in the handler
+  view but not populated, so an unowned slide offers a Request link to the title
+  page rather than a one-tap request action.
+- The app clients (`silo-apple`, `silo-android`) have not been changed; the row
+  is feature-detected through `anticipated_supported`.
+
