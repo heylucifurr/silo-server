@@ -22,6 +22,17 @@ type HeroClipCandidates interface {
 	ClipCandidates(ctx context.Context, recipe string, retryAfter time.Duration, limit int) ([]heroclips.Candidate, error)
 }
 
+// AnticipatedClipCandidates lists the curated titles a run should make clips for.
+//
+// It is deliberately a separate interface from HeroClipCandidates even though
+// the two queries share a shape: *heroclips.Repository answers both, so pointing
+// the curated pass at ClipCandidates would hand it the featured rows' catalog
+// titles instead of the curated ones, and every one of them would be rejected as
+// not an anticipated id. The distinct method name makes that wiring impossible.
+type AnticipatedClipCandidates interface {
+	AnticipatedCandidates(ctx context.Context, recipe string, retryAfter time.Duration, limit int) ([]heroclips.Candidate, error)
+}
+
 // HeroClipGenerator makes one title's clip. Satisfied by *heroclips.Generator.
 type HeroClipGenerator interface {
 	Create(ctx context.Context, candidate heroclips.Candidate) error
@@ -39,14 +50,14 @@ type GenerateHeroClipsTask struct {
 	recipe     heroclips.Recipe
 	// anticipatedCandidates and anticipatedGenerator run a second pass over the
 	// curated "Most Anticipated" titles the library does not own. Nil skips it.
-	anticipatedCandidates HeroClipCandidates
+	anticipatedCandidates AnticipatedClipCandidates
 	anticipatedGenerator  HeroClipGenerator
 }
 
 // WithAnticipated adds the pass over the curated titles the library does not own,
 // whose clips live in anticipated_clips rather than hero_clips. Returns the task
 // so wiring reads as one expression.
-func (t *GenerateHeroClipsTask) WithAnticipated(candidates HeroClipCandidates, generator HeroClipGenerator) *GenerateHeroClipsTask {
+func (t *GenerateHeroClipsTask) WithAnticipated(candidates AnticipatedClipCandidates, generator HeroClipGenerator) *GenerateHeroClipsTask {
 	t.anticipatedCandidates = candidates
 	t.anticipatedGenerator = generator
 	return t
@@ -68,23 +79,25 @@ func (t *GenerateHeroClipsTask) IsHidden() bool { return false }
 func (t *GenerateHeroClipsTask) DefaultTriggers() []taskmanager.TriggerConfig {
 	return []taskmanager.TriggerConfig{
 		{Type: taskmanager.TriggerTypeStartup},
-		{Type: taskmanager.TriggerTypeInterval, IntervalMs: int64((6 * time.Hour) / time.Millisecond)},
+		{Type: taskmanager.TriggerTypeInterval, IntervalMs: int64((24 * time.Hour) / time.Millisecond)},
 	}
 }
 
 func (t *GenerateHeroClipsTask) Execute(ctx context.Context, progress taskmanager.ProgressReporter) error {
-	if t.candidates == nil || t.generator == nil {
+	ownedWired := t.candidates != nil && t.generator != nil
+	anticipatedWired := t.anticipatedCandidates != nil && t.anticipatedGenerator != nil
+	if !ownedWired && !anticipatedWired {
 		progress.Report(100, "Hero clips are not configured")
 		return nil
 	}
 
-	candidates, err := t.candidates.ClipCandidates(ctx, t.recipe.String(), heroClipRetryAfter, heroClipsPerRun)
-	if err != nil {
-		return fmt.Errorf("list hero clip candidates: %w", err)
-	}
-	if len(candidates) == 0 {
-		progress.Report(100, "Every featured title already has its clip")
-		return nil
+	candidates := []heroclips.Candidate(nil)
+	if ownedWired {
+		var err error
+		candidates, err = t.candidates.ClipCandidates(ctx, t.recipe.String(), heroClipRetryAfter, heroClipsPerRun)
+		if err != nil {
+			return fmt.Errorf("list hero clip candidates: %w", err)
+		}
 	}
 
 	// Create records its own failures on the title and reports success, so the
@@ -100,8 +113,11 @@ func (t *GenerateHeroClipsTask) Execute(ctx context.Context, progress taskmanage
 	}
 
 	made := len(candidates)
-	if t.anticipatedCandidates != nil && t.anticipatedGenerator != nil {
-		anticipated, err := t.anticipatedCandidates.ClipCandidates(ctx, t.recipe.String(), heroClipRetryAfter, heroClipsPerRun)
+	// The curated pass runs whether or not the featured rows had work: a hero row
+	// of curated titles the library owns none of is the ordinary case, and a run
+	// that stopped at an empty catalog pass would never make those clips.
+	if anticipatedWired {
+		anticipated, err := t.anticipatedCandidates.AnticipatedCandidates(ctx, t.recipe.String(), heroClipRetryAfter, heroClipsPerRun)
 		if err != nil {
 			return fmt.Errorf("list anticipated clip candidates: %w", err)
 		}

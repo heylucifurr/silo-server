@@ -88,7 +88,7 @@ element re-requests as it goes. Guideposts:
 
 ## Generating them, and who pays for it
 
-`GenerateHeroClipsTask` is where clips get made: startup, then every six hours,
+`GenerateHeroClipsTask` is where clips get made: startup, then every 24 hours,
 visible in the admin task list, boundable per run. It targets the titles the
 **featured discover rows hold** — read from the same published snapshot the hero
 renders — not every title in a library, so the work follows what viewers are
