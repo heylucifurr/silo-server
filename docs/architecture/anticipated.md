@@ -65,12 +65,23 @@ for free.
 
 ### How a slide reads
 
-`sections.AnticipatedAvailability(item, now)` decides, at read time and with no
+`sections.AnticipatedAvailability(item)` decides, at read time and with no
 stored state:
 
 - a real catalog item is `in_library`, and the slide offers Play;
-- a synthetic item is `unreleased` while its release date is in the future, else
-  `released_unowned`.
+- a curated title the library does not own is `unreleased`, and the slide offers
+  Coming soon.
+
+A curated title stays `unreleased` after the release date in its snapshot on
+purpose. That date is when a title opened, not when anyone can own a copy, and
+the row is the administrator's list of what they are waiting for, so Coming soon
+holds until a copy arrives and the entry matches the library. Requesting a title
+that is already out happens on its title page, which carries the request actions.
+`released_unowned` stays in the card contract for a server that can tell a title
+is obtainable; this one does not send it.
+
+The slide shows the snapshot's release date only while it is still ahead, so the
+badge never reads "Coming soon" over a date that has passed.
 
 Nothing writes on promotion — the read decides — so a node dying mid-anything
 cannot corrupt the lifecycle, and no race exists between nodes.

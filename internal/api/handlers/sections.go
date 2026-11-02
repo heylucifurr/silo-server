@@ -1966,7 +1966,7 @@ func (h *SectionHandler) toSectionItemResponse(sectionType sections.SectionType,
 	// TMDB, and its availability tells the hero to offer Coming soon rather than
 	// Play. Everything else about the card is ordinary.
 	if sections.IsExternalContentID(item.ContentID) {
-		resp.Availability = sections.AnticipatedAvailability(item, time.Now())
+		resp.Availability = sections.AnticipatedAvailability(item)
 		if id, err := strconv.Atoi(item.TmdbID); err == nil {
 			resp.TMDBID = id
 		}

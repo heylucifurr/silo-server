@@ -2,7 +2,6 @@ package sections
 
 import (
 	"strings"
-	"time"
 
 	"github.com/Silo-Server/silo-server/internal/models"
 )
@@ -11,8 +10,12 @@ import (
 // card contract; the client branches on these rather than on the id prefix, so it
 // never depends on the server's internal id convention.
 const (
-	AvailabilityInLibrary       = "in_library"
-	AvailabilityUnreleased      = "unreleased"
+	AvailabilityInLibrary  = "in_library"
+	AvailabilityUnreleased = "unreleased"
+	// AvailabilityReleasedUnowned stays in the contract for a server that can
+	// tell a curated title is already obtainable. This one never sends it: it
+	// holds no date that says a copy can be had, so a curated title reads
+	// unreleased until a copy arrives (see AnticipatedAvailability).
 	AvailabilityReleasedUnowned = "released_unowned"
 )
 
@@ -37,17 +40,18 @@ func TMDBImageURL(path, size string) string {
 }
 
 // AnticipatedAvailability reports how an anticipated section item reads on the
-// hero at now: a real catalog item is in the library; a synthetic external item
-// is unreleased until its release date has passed, then released_unowned. An
-// entry with no release date reads as released_unowned (it is not unreleased).
-func AnticipatedAvailability(item *models.MediaItem, now time.Time) string {
+// hero: a real catalog item is in the library, and a curated title the library
+// does not own is unreleased.
+//
+// A curated title stays unreleased after the release date in its snapshot on
+// purpose. That date is when a title opened, not when anyone can own a copy, and
+// a curated row is the administrator's list of what they are waiting for, so
+// Coming soon holds until a copy arrives and the entry matches the library. A
+// viewer who wants to ask for a title that is already out does it from the title
+// page, which carries the request actions.
+func AnticipatedAvailability(item *models.MediaItem) string {
 	if item == nil || !IsExternalContentID(item.ContentID) {
 		return AvailabilityInLibrary
 	}
-	if item.ReleaseDate != nil {
-		if date, err := time.Parse("2006-01-02", *item.ReleaseDate); err == nil && date.After(now) {
-			return AvailabilityUnreleased
-		}
-	}
-	return AvailabilityReleasedUnowned
+	return AvailabilityUnreleased
 }

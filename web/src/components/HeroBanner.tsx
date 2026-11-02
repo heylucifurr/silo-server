@@ -168,11 +168,19 @@ const HeroBackdropSlide = memo(function HeroBackdropSlide({
   );
 });
 
-/** A slide's release date as "18 Dec 2026", or "" when there is none. */
+/**
+ * A slide's release date as "18 Dec 2026", or "" when there is none or it has
+ * already passed.
+ *
+ * An unowned curated title stays Coming soon past the date its snapshot carries:
+ * that date is when a title opened, not when a copy can be owned. A past date
+ * under the badge would read as a mistake, so only an upcoming one is shown.
+ */
 function formatHeroReleaseDate(value: string | undefined): string {
   if (!value) return "";
   const parsed = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return "";
+  if (parsed.getTime() <= Date.now()) return "";
   return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -536,7 +544,7 @@ export default function HeroBanner({
   const availability = current?.availability;
   const unowned = availability !== undefined && availability !== "in_library";
   const releasedUnowned = availability === "released_unowned";
-  const comingSoonDate = formatHeroReleaseDate(current?.release_date);
+  const comingSoonDate = formatHeroReleaseDate(current?.release_date ?? undefined);
   const comingSoonLabel = comingSoonDate ? `Coming soon · ${comingSoonDate}` : "Coming soon";
   const titleHref =
     current?.tmdb_id != null
