@@ -14,6 +14,14 @@ import (
 // truncated per test.
 func testStore(t *testing.T) *Store {
 	t.Helper()
+	store, _ := testStoreWithPool(t)
+	return store
+}
+
+// testStoreWithPool is testStore plus the pool, for tests that must touch rows
+// directly (for example to make an entry due for a refresh).
+func testStoreWithPool(t *testing.T) (*Store, *pgxpool.Pool) {
+	t.Helper()
 	dsn := os.Getenv("SILO_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("SILO_TEST_DATABASE_URL is not set")
@@ -28,7 +36,7 @@ func testStore(t *testing.T) *Store {
 	}
 	clear()
 	t.Cleanup(clear)
-	return NewStore(pool)
+	return NewStore(pool), pool
 }
 
 func TestAnticipatedStoreReplaceAndList(t *testing.T) {
@@ -87,12 +95,17 @@ func TestAnticipatedStoreReplaceAndList(t *testing.T) {
 		t.Fatalf("position = %d, want 0", got.Position)
 	}
 
-	// Re-adding the same pair does not create a second row.
-	list, err = store.ReplaceAll(ctx, []Input{series, movie, series})
+	// A duplicate pair inside one call is refused before anything is written.
+	if _, err := store.ReplaceAll(ctx, []Input{series, movie, series}); err == nil {
+		t.Fatal("ReplaceAll: want a duplicate entry to be refused")
+	}
+
+	// Sending the same pairs again keeps the rows already stored.
+	list, err = store.ReplaceAll(ctx, []Input{series, movie})
 	if err != nil {
 		t.Fatalf("ReplaceAll re-add: %v", err)
 	}
 	if len(list) != 2 {
-		t.Fatalf("duplicate pair created extra rows: len = %d, want 2", len(list))
+		t.Fatalf("len = %d, want 2 (a duplicate row must not appear)", len(list))
 	}
 }

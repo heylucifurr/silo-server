@@ -38,13 +38,18 @@ func TestServiceReplaceResolvesNewEntries(t *testing.T) {
 
 func TestServiceRefreshKeepsLastGoodSnapshotOnError(t *testing.T) {
 	ctx := t.Context()
-	store := testStore(t)
+	store, pool := testStoreWithPool(t)
 	good := &fakeTMDB{
 		detail: &tmdb.MediaDetail{Title: "Kept", ReleaseDate: "2026-05-05"},
 	}
 	svc := NewService(store, good)
 	if _, err := svc.Replace(ctx, []Input{{MediaType: MediaMovie, TMDBID: 7}}); err != nil {
 		t.Fatalf("Replace: %v", err)
+	}
+
+	// A successful resolve schedules the next check a day out; bring it forward.
+	if _, err := pool.Exec(ctx, `UPDATE anticipated_titles SET next_check_at = now() - interval '1 hour'`); err != nil {
+		t.Fatalf("make the entry due: %v", err)
 	}
 
 	// The next read fails: the snapshot must survive and the failure recorded.
