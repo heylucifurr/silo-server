@@ -725,6 +725,7 @@ func registerAll(reg *Registry) {
 	registerAdminRequests(reg)
 	registerAdminRequestRoutes(reg)
 	registerAdminRequestDiscover(reg)
+	registerAdminAnticipated(reg)
 	registerAdminRequestQueue(reg)
 	registerAdminRequestGroups(reg)
 	registerRequestLifecycle(reg, reg.deps.RequestLifecycle, reg.deps.WatchProviders)

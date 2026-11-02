@@ -29,6 +29,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/api/handlers"
 	apimw "github.com/Silo-Server/silo-server/internal/api/middleware"
 	"github.com/Silo-Server/silo-server/internal/apiusage"
+	"github.com/Silo-Server/silo-server/internal/anticipated"
 	"github.com/Silo-Server/silo-server/internal/apiv2"
 	"github.com/Silo-Server/silo-server/internal/artworkurl"
 	"github.com/Silo-Server/silo-server/internal/auth"
@@ -2176,6 +2177,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		// snapshot table; the upstream fetch happens out-of-band in the refresh
 		// task, so the read path never calls the provider.
 		sectionFetcher.TrendingSnapshots = sections.NewTrendingSnapshotRepository(deps.DB)
+	// The anticipated row reads the curated list and matches it to the library.
+	sectionFetcher.Anticipated = anticipated.NewStore(deps.DB)
+	sectionFetcher.AnticipatedResolver = catalog.NewItemRepository(deps.DB)
 		sectionFetcher.SeasonalLists = sections.NewSeasonalListRepository(deps.DB)
 		if sectionFetcher.RecommendationRepo != nil {
 			sectionFetcher.SeasonalNeighbors = sectionFetcher.RecommendationRepo
@@ -2519,6 +2523,11 @@ func newChiRouter(deps Dependencies) chi.Router {
 	)
 	v2deps := v2Dependencies(deps, authMiddleware, viewerAccessMiddleware, actingAdmin, metadataCurationAccess, markerEditAccess, settingsRepo)
 	v2deps.CompatConnectInfo = compatConnectInfoHandler
+	// The curated "Most Anticipated" list: read by the anticipated Home row and
+	// edited through /api/v2/admin/anticipated.
+	if deps.DB != nil && deps.TMDB != nil {
+		v2deps.Anticipated = anticipated.NewService(anticipated.NewStore(deps.DB), deps.TMDB)
+	}
 	// Server identity is public discovery data, so it reads through the raw
 	// settings repo: a SECRET_KEY rotation must not change who the server is.
 	if deps.DB != nil {

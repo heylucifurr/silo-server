@@ -432,6 +432,9 @@ type Dependencies struct {
 	// (*requests.Service, the value *handlers.RequestsHandler wraps).
 	AdminSubtitleInspection            AdminSubtitleInspectionService
 	AdminRequests                      handlers.RequestService
+	// Anticipated curates the "Most Anticipated" list the anticipated Home row
+	// shows (*anticipated.Service).
+	Anticipated anticipatedService
 	Requests                           MediaRequestService
 	RequestLifecycle                   RequestLifecycleService
 	WatchProviders                     WatchProviderService

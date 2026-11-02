@@ -17,6 +17,23 @@
       "category": "discovery",
       "recipes": [
         {
+          "type": "anticipated",
+          "category": "discovery",
+          "presets": [
+            {
+              "key": "anticipated_default",
+              "display_name": "Most Anticipated",
+              "icon": "🎬",
+              "description_short": "Upcoming titles you do not have yet.",
+              "description_long": "",
+              "default_params": {}
+            }
+          ],
+          "avoid_duplicates": true,
+          "supports_rotation": false,
+          "admin_only": false
+        },
+        {
           "type": "critically_acclaimed",
           "category": "discovery",
           "presets": [
