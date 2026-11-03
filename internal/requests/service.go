@@ -325,12 +325,23 @@ func (s *Service) filterPageByCeiling(ctx context.Context, raw *tmdb.MediaPage, 
 	return &filtered, nil
 }
 
-// allowedQualities returns the qualities a request may receive: 1080p always,
-// plus 2160p when force-dual is on or the requester's entitlement ceiling allows 4K.
-// allowedQualities returns the qualities the request should be fulfilled in.
-// resolved is false when the requester's entitlement could not be looked up,
-// so the answer is the HD-only fail-safe rather than the real policy.
+// allowedQualities returns the qualities a request should be fulfilled in.
+// The qualities stored on the request are authoritative: a request keeps the
+// choice it was created with, so a later change to the server settings or the
+// requester's playback ceiling does not silently add or drop a copy.
+//
+// A row without stored qualities (written before the column existed, or built
+// directly by a caller) keeps the pre-column rule: HD always, plus 4K when
+// force-dual is on or the requester's playback ceiling allows it. resolved is
+// false when that ceiling lookup failed and the HD-only fail-safe was used.
 func (s *Service) allowedQualities(ctx context.Context, req Request, settings Settings) (qualities []Quality, resolved bool) {
+	if len(req.RequestedQualities) > 0 {
+		out, err := NormalizeQualities(req.RequestedQualities)
+		if err != nil {
+			return []Quality{Quality1080p}, false
+		}
+		return out, true
+	}
 	out := []Quality{Quality1080p}
 	ceiling, resolved := s.requesterCeiling(ctx, req.RequestedByUserID, req.RequestedByProfileID)
 	// QualityAllowed treats an empty ceiling as "no cap" (the "Any" preset), so a
@@ -340,6 +351,28 @@ func (s *Service) allowedQualities(ctx context.Context, req Request, settings Se
 		out = append(out, Quality2160p)
 	}
 	return out, resolved
+}
+
+// requestedQualities decides the qualities a new request asks for, stored on
+// the request row. Only an admin account may request 4K: a non-admin always
+// asks for HD, and a non-admin that sends 4K is refused. An admin's request is
+// HD, plus 4K when the server-wide force-dual switch is on, or the qualities
+// they chose for this request.
+func (s *Service) requestedQualities(viewer Viewer, input CreateRequestInput, settings Settings) ([]Quality, error) {
+	if !viewer.IsAdmin {
+		if slices.Contains(input.Qualities, Quality2160p) {
+			return nil, ErrForbidden
+		}
+		return []Quality{Quality1080p}, nil
+	}
+	if len(input.Qualities) == 0 {
+		chosen := []Quality{Quality1080p}
+		if settings.ForceDualQuality {
+			chosen = append(chosen, Quality2160p)
+		}
+		return chosen, nil
+	}
+	return NormalizeQualities(input.Qualities)
 }
 
 // fulfillContext caches the global fulfillment inputs for one reconcile cycle
@@ -778,6 +811,15 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 	if err := s.ensureCreateAllowedByCeiling(ctx, viewer, normalized); err != nil {
 		return nil, err
 	}
+	settings, err := s.store.GetSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	qualities, err := s.requestedQualities(viewer, normalized, settings)
+	if err != nil {
+		return nil, err
+	}
+	normalized.Qualities = qualities
 	tvdbLookupFailed := s.enrichExternalIDs(ctx, &normalized)
 
 	matches, err := s.lookupPresence(ctx, normalized.MediaType, []PresenceCandidate{createPresenceCandidate(normalized)})
@@ -798,11 +840,11 @@ func (s *Service) CreateRequest(ctx context.Context, viewer Viewer, input Create
 		}
 	}
 
-	active, err := s.store.ListActiveByTMDB(ctx, normalized.MediaType, []int{normalized.TMDBID})
+	activeQualities, err := s.store.ListActiveQualitiesByTMDB(ctx, normalized.MediaType, []int{normalized.TMDBID})
 	if err != nil {
 		return nil, err
 	}
-	if active[normalized.TMDBID] != nil {
+	if QualitiesOverlap(activeQualities[normalized.TMDBID], normalized.Qualities) {
 		return nil, ErrAlreadyRequested
 	}
 

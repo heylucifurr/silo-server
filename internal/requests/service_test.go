@@ -1365,6 +1365,27 @@ func (f *fakeStore) ListActiveByTMDB(_ context.Context, mediaType MediaType, ids
 	return out, nil
 }
 
+// ListActiveQualitiesByTMDB mirrors the repository: the qualities the title's
+// active requests already ask for. A seeded active request with none reads as
+// HD, the way a pre-column row does.
+func (f *fakeStore) ListActiveQualitiesByTMDB(_ context.Context, mediaType MediaType, ids []int) (map[int][]Quality, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[int][]Quality{}
+	for _, id := range ids {
+		req := f.active[mediaType][id]
+		if req == nil || req.Outcome != OutcomeActive || req.Status == StatusCompleted {
+			continue
+		}
+		qualities := req.RequestedQualities
+		if len(qualities) == 0 {
+			qualities = []Quality{Quality1080p}
+		}
+		out[id] = append(out[id], qualities...)
+	}
+	return out, nil
+}
+
 func (f *fakeStore) ListProfileWatchlistRequests(_ context.Context, userID int, profileID string) ([]*Request, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1409,6 +1430,7 @@ func (f *fakeStore) CreateRequest(_ context.Context, input CreateRequestRecord) 
 		RequestedByUserID:    input.Requester.UserID,
 		RequestedByProfileID: input.Requester.ProfileID,
 		Source:               requestSource(input.Input.Source),
+		RequestedQualities:   input.Input.Qualities,
 		CreatedAt:            input.Now,
 		UpdatedAt:            input.Now,
 	}
@@ -2734,19 +2756,33 @@ func TestUpdateIntegrationPassesSiblingsToValidate(t *testing.T) {
 func TestAllowedQualities(t *testing.T) {
 	svc := newTestService(newFakeStore())
 
-	t.Run("hd ceiling stays 1080p only", func(t *testing.T) {
-		svcHD := newTestService(newFakeStore())
-		svcHD.SetEntitlementResolver(fixedCeiling{q: "1080p"})
-		got, _ := svcHD.allowedQualities(context.Background(), Request{}, Settings{})
-		if len(got) != 1 || got[0] != Quality1080p {
-			t.Fatalf("qualities = %v, want [1080p]", got)
+	t.Run("stored 4K only", func(t *testing.T) {
+		got, resolved := svc.allowedQualities(context.Background(), Request{RequestedQualities: []Quality{Quality2160p}}, Settings{})
+		if !resolved || len(got) != 1 || got[0] != Quality2160p {
+			t.Fatalf("qualities = %v resolved=%v, want [2160p]", got, resolved)
 		}
 	})
 
-	t.Run("any/no-cap ceiling adds 2160p", func(t *testing.T) {
+	t.Run("stored both", func(t *testing.T) {
+		got, _ := svc.allowedQualities(context.Background(), Request{RequestedQualities: []Quality{Quality1080p, Quality2160p}}, Settings{})
+		if len(got) != 2 || got[0] != Quality1080p || got[1] != Quality2160p {
+			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
+		}
+	})
+
+	t.Run("a stored HD choice ignores a 4K ceiling", func(t *testing.T) {
+		svc4k := newTestService(newFakeStore())
+		svc4k.SetEntitlementResolver(fixedCeiling{q: "2160p"})
+		got, _ := svc4k.allowedQualities(context.Background(), Request{RequestedQualities: []Quality{Quality1080p}}, Settings{})
+		if len(got) != 1 || got[0] != Quality1080p {
+			t.Fatalf("qualities = %v, want [1080p] from the stored choice", got)
+		}
+	})
+
+	t.Run("a legacy row falls back to the ceiling", func(t *testing.T) {
 		// A requester whose max playback quality is "Any" resolves to an empty
-		// (no-cap) ceiling. Empty means UNLIMITED, so 4K must be requested
-		// alongside 1080p — it must not be read as "below 4K".
+		// (no-cap) ceiling. Empty means UNLIMITED, so a legacy row with no
+		// stored qualities still gets 4K alongside 1080p.
 		svcAny := newTestService(newFakeStore())
 		svcAny.SetEntitlementResolver(fixedCeiling{q: ""})
 		got, _ := svcAny.allowedQualities(context.Background(), Request{}, Settings{})
@@ -2755,17 +2791,8 @@ func TestAllowedQualities(t *testing.T) {
 		}
 	})
 
-	t.Run("force dual adds 2160p", func(t *testing.T) {
+	t.Run("force dual adds 2160p to a legacy row", func(t *testing.T) {
 		got, _ := svc.allowedQualities(context.Background(), Request{}, Settings{ForceDualQuality: true})
-		if len(got) != 2 || got[1] != Quality2160p {
-			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
-		}
-	})
-
-	t.Run("4k ceiling adds 2160p", func(t *testing.T) {
-		svc4k := newTestService(newFakeStore())
-		svc4k.SetEntitlementResolver(fixedCeiling{q: "2160p"})
-		got, _ := svc4k.allowedQualities(context.Background(), Request{}, Settings{})
 		if len(got) != 2 || got[1] != Quality2160p {
 			t.Fatalf("qualities = %v, want [1080p 2160p]", got)
 		}

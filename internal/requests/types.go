@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -41,6 +42,10 @@ const (
 	OutcomeDeclined  Outcome = "declined"
 	OutcomeCancelled Outcome = "cancelled"
 	OutcomeFailed    Outcome = "failed"
+	// OutcomeRemoved is a request an admin deleted from the queue. The row and
+	// its history are kept so reconciliation and the audit trail stay intact,
+	// but it no longer counts as active and is hidden from the queue by default.
+	OutcomeRemoved Outcome = "removed"
 )
 
 type Quality string
@@ -49,6 +54,51 @@ const (
 	Quality1080p Quality = "1080p"
 	Quality2160p Quality = "2160p"
 )
+
+// Valid reports whether q is a storable request quality.
+func (q Quality) Valid() bool {
+	return q == Quality1080p || q == Quality2160p
+}
+
+// NormalizeQualities returns the qualities to store for a request: the given
+// ones, deduped and ordered HD first, or the HD default when none are given.
+// An unknown quality is refused.
+func NormalizeQualities(in []Quality) ([]Quality, error) {
+	if len(in) == 0 {
+		return []Quality{Quality1080p}, nil
+	}
+	var hasHD, hasUHD bool
+	for _, q := range in {
+		switch q {
+		case Quality1080p:
+			hasHD = true
+		case Quality2160p:
+			hasUHD = true
+		default:
+			return nil, fmt.Errorf("requests: unknown quality %q", q)
+		}
+	}
+	out := make([]Quality, 0, 2)
+	if hasHD {
+		out = append(out, Quality1080p)
+	}
+	if hasUHD {
+		out = append(out, Quality2160p)
+	}
+	return out, nil
+}
+
+// QualitiesOverlap reports whether two quality sets share a quality.
+func QualitiesOverlap(a, b []Quality) bool {
+	for _, q := range a {
+		for _, other := range b {
+			if q == other {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // Target is one fulfillment of a request against a single instance at a single
 // quality. A request fans out to one Target per resolved quality.
@@ -273,18 +323,21 @@ type Request struct {
 	// reason was given. v2 only; the frozen v1 shape does not carry it.
 	OutcomeReason string `json:"-"`
 	// Source is what created the request. v2 only.
-	Source           Source     `json:"-"`
-	IntegrationKind  string     `json:"integration_kind,omitempty"`
-	IsAnime          bool       `json:"is_anime"`
-	Targets          []Target   `json:"targets,omitempty"`
-	ExternalID       string     `json:"external_id,omitempty"`
-	ExternalStatus   string     `json:"external_status,omitempty"`
-	LibraryContentID string     `json:"library_content_id,omitempty"`
-	LastError        string     `json:"last_error,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
-	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	Source          Source `json:"-"`
+	IntegrationKind string `json:"integration_kind,omitempty"`
+	IsAnime         bool   `json:"is_anime"`
+	// RequestedQualities are the qualities the request asks for (1080p and/or
+	// 2160p). A request with none stored predates the column and reads as HD.
+	RequestedQualities []Quality  `json:"requested_qualities,omitempty"`
+	Targets            []Target   `json:"targets,omitempty"`
+	ExternalID         string     `json:"external_id,omitempty"`
+	ExternalStatus     string     `json:"external_status,omitempty"`
+	LibraryContentID   string     `json:"library_content_id,omitempty"`
+	LastError          string     `json:"last_error,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	ApprovedAt         *time.Time `json:"approved_at,omitempty"`
+	CompletedAt        *time.Time `json:"completed_at,omitempty"`
 	// SubmitAttempts counts router submissions claimed for the current
 	// approval. SubmitLeaseUntil is set while a claimed submission is in
 	// flight; NextSubmitAt is the backoff after a failed attempt.
@@ -357,6 +410,8 @@ const (
 	StateDeclined           State = "declined"
 	StateCancelled          State = "cancelled" //nolint:misspell // matches the outcome spelling
 	StateFailed             State = "failed"
+	// StateRemoved: an admin deleted the request from the queue.
+	StateRemoved State = "removed"
 )
 
 // State derives the request's user-facing state. A completed request is
@@ -373,6 +428,8 @@ func (r *Request) State() State {
 		return StateCancelled
 	case OutcomeFailed:
 		return StateFailed
+	case OutcomeRemoved:
+		return StateRemoved
 	}
 	if r.Status == StatusPending {
 		return StatePending
@@ -526,6 +583,10 @@ type CreateRequestInput struct {
 	// Source records what created the request; empty means SourceDirect.
 	// Set by the watchlist path, never read from a client body.
 	Source Source `json:"-"`
+	// Qualities are the qualities the request should be fulfilled in. The
+	// service sets them when the request is created; empty means the HD
+	// default. Never read from a client body.
+	Qualities []Quality `json:"-"`
 }
 
 // RequestPageKey identifies the last emitted request in descending creation order.

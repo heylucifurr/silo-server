@@ -226,6 +226,41 @@ func (r *Repository) ListActiveByTMDB(ctx context.Context, mediaType MediaType, 
 	return out, nil
 }
 
+// ListActiveQualitiesByTMDB returns, per TMDB id, the qualities the title's
+// active (non-completed) requests already ask for. A request created before
+// the requested_qualities column reads as HD.
+func (r *Repository) ListActiveQualitiesByTMDB(ctx context.Context, mediaType MediaType, tmdbIDs []int) (map[int][]Quality, error) {
+	if len(tmdbIDs) == 0 {
+		return map[int][]Quality{}, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT tmdb_id, requested_qualities
+		FROM media_requests
+		WHERE media_type = $1
+		  AND provider = 'tmdb'
+		  AND tmdb_id = ANY($2)
+		  AND outcome = 'active'
+		  AND status <> 'completed'
+	`, mediaType, tmdbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list active request qualities by tmdb: %w", err)
+	}
+	defer rows.Close()
+	out := map[int][]Quality{}
+	for rows.Next() {
+		var tmdbID int
+		var qualities []string
+		if err := rows.Scan(&tmdbID, &qualities); err != nil {
+			return nil, err
+		}
+		out[tmdbID] = append(out[tmdbID], qualitySlice(qualities)...)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active request qualities by tmdb: %w", err)
+	}
+	return out, nil
+}
+
 func (r *Repository) ListProfileWatchlistRequests(ctx context.Context, userID int, profileID string) ([]*Request, error) {
 	rows, err := r.pool.Query(ctx, requestSelectSQL()+`
 		WHERE requested_by_user_id = $1
@@ -257,6 +292,11 @@ func (r *Repository) ListProfileWatchlistRequests(ctx context.Context, userID in
 // arbitrary; what matters is that it is stable.
 const quotaLockNamespace = 139
 
+// titleLockNamespace partitions the per-title advisory lock that serializes
+// request creation for one title, so two callers cannot both pass the
+// overlapping-qualities check and insert.
+const titleLockNamespace = 140
+
 func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecord) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -283,6 +323,31 @@ func (r *Repository) CreateRequest(ctx context.Context, input CreateRequestRecor
 		if count >= input.Quota.MaxRequests {
 			return nil, ErrQuotaExceeded
 		}
+	}
+
+	// One title may hold an HD request and a 4K request at once, but not two
+	// requests that share a quality. The old partial unique index enforced one
+	// active row per title; this check, under a per-title lock, replaces it and
+	// also catches two callers racing to create the same request.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int4, $2::int4)`,
+		titleLockNamespace, input.Input.TMDBID); err != nil {
+		return nil, fmt.Errorf("acquire request title lock: %w", err)
+	}
+	var qualityOverlap bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM media_requests
+			WHERE media_type = $1
+			  AND provider = 'tmdb'
+			  AND tmdb_id = $2
+			  AND outcome = 'active'
+			  AND status <> 'completed'
+			  AND requested_qualities && $3::text[]
+		)`, input.Input.MediaType, input.Input.TMDBID, nonNilQualities(input.Input.Qualities)).Scan(&qualityOverlap); err != nil {
+		return nil, fmt.Errorf("check request quality overlap: %w", err)
+	}
+	if qualityOverlap {
+		return nil, ErrAlreadyRequested
 	}
 
 	now := input.Now
@@ -376,20 +441,21 @@ func (r *Repository) insertRequest(
 			id, provider, media_type, tmdb_id, tvdb_id, imdb_id, title, year,
 			overview, poster_path, backdrop_path, status, outcome,
 			requested_by_user_id, requested_by_profile_id, is_anime, created_at, updated_at, approved_at,
-			routing_facts, seasons, source
+			routing_facts, seasons, source, requested_qualities
 		)
 		VALUES (
 			$1, 'tmdb', $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12,
 			$13, $14, $15, $16, $16, $17,
-			$18, $19, $20
+			$18, $19, $20, $21
 		)
 		RETURNING `+requestColumns(), input.ID, input.Input.MediaType, input.Input.TMDBID, tvdbID,
 		strings.TrimSpace(input.Input.IMDbID), strings.TrimSpace(input.Input.Title), year,
 		strings.TrimSpace(input.Input.Overview), strings.TrimSpace(input.Input.PosterPath),
 		strings.TrimSpace(input.Input.BackdropPath), status, outcome,
 		input.Requester.UserID, input.Requester.ProfileID, input.IsAnime, now, approvedAt,
-		facts, nonNilSeasons(input.Input.Seasons), requestSource(input.Input.Source))
+		facts, nonNilSeasons(input.Input.Seasons), requestSource(input.Input.Source),
+		nonNilQualities(input.Input.Qualities))
 	req, err := scanRequest(row)
 	if err != nil {
 		return nil, fmt.Errorf("insert request: %w", err)
@@ -1451,6 +1517,30 @@ func requestSource(source Source) Source {
 	return source
 }
 
+// nonNilQualities stores a request's qualities; an unset set is HD only.
+func nonNilQualities(qualities []Quality) []string {
+	if len(qualities) == 0 {
+		return []string{string(Quality1080p)}
+	}
+	out := make([]string, 0, len(qualities))
+	for _, q := range qualities {
+		out = append(out, string(q))
+	}
+	return out
+}
+
+// qualitySlice converts a stored text[] into Quality values, dropping anything
+// the column's check constraint already refuses (defensive).
+func qualitySlice(in []string) []Quality {
+	out := make([]Quality, 0, len(in))
+	for _, q := range in {
+		if Quality(q).Valid() {
+			out = append(out, Quality(q))
+		}
+	}
+	return out
+}
+
 func requestSelectSQL() string {
 	return "SELECT " + requestColumns() + " FROM media_requests "
 }
@@ -1460,7 +1550,8 @@ func requestColumns() string {
 	        overview, poster_path, backdrop_path, status, outcome,
 	        requested_by_user_id, requested_by_profile_id, is_anime,
 	        last_error, created_at, updated_at, approved_at, completed_at,
-	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason, routing_facts, seasons, source`
+	        submit_attempts, submit_lease_until, next_submit_at, outcome_reason, routing_facts, seasons, source,
+	        requested_qualities`
 }
 
 type requestScanner interface {
@@ -1472,6 +1563,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 	var tvdbID, year sql.NullInt64
 	var approvedAt, completedAt, submitLeaseUntil, nextSubmitAt sql.NullTime
 	var rawFacts []byte
+	var rawQualities []string
 	if err := row.Scan(
 		&req.ID,
 		&req.Provider,
@@ -1501,6 +1593,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 		&rawFacts,
 		&req.Seasons,
 		&req.Source,
+		&rawQualities,
 	); err != nil {
 		return nil, err
 	}
@@ -1509,6 +1602,7 @@ func scanRequest(row requestScanner) (*Request, error) {
 		return nil, err
 	}
 	req.RoutingFacts = facts
+	req.RequestedQualities = qualitySlice(rawQualities)
 	if tvdbID.Valid {
 		v := int(tvdbID.Int64)
 		req.TVDBID = &v
