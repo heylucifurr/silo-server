@@ -7,17 +7,19 @@ import (
 	"strings"
 )
 
-// TargetDeleter removes a fulfilled target from the download service that
-// holds it. The host implements it for Seerr; it returns nil for a target it
-// does not handle (a server of another kind), so those are removed from Silo
-// only. A target that was never submitted has no external id and is never
-// handed to a deleter.
-type TargetDeleter interface {
+// TargetService is the host's download-service client (Seerr). DeleteTarget
+// removes a fulfilled target; TargetExists reports whether the target's
+// request still exists there, so a request deleted in Seerr directly is
+// retired in Silo instead of sitting in flight forever. Both return nil/true
+// for a connection of another kind, which the host leaves alone.
+type TargetService interface {
 	DeleteTarget(ctx context.Context, in Integration, target Target, opts DeleteOptions) error
+	TargetExists(ctx context.Context, in Integration, target Target) (bool, error)
 }
 
-// SetTargetDeleter wires the download-service deleter DeleteRequest uses.
-func (s *Service) SetTargetDeleter(d TargetDeleter) { s.deleter = d }
+// SetTargetService wires the download-service client DeleteRequest and the
+// reconcile pass use.
+func (s *Service) SetTargetService(t TargetService) { s.targets = t }
 
 // DeleteRequest removes a request from Silo, admin only. For each selected
 // quality the target is removed from its download service first (unless
@@ -84,7 +86,7 @@ func (s *Service) DeleteRequest(ctx context.Context, viewer Viewer, id string, o
 // A target with no external id was never sent, and one whose server is gone or
 // disabled has nothing to remove, so both are removed from Silo only.
 func (s *Service) deleteDownstream(ctx context.Context, target Target, opts DeleteOptions) error {
-	if opts.SiloOnly || s.deleter == nil {
+	if opts.SiloOnly || s.targets == nil {
 		return nil
 	}
 	if strings.TrimSpace(target.ExternalID) == "" || strings.TrimSpace(target.IntegrationID) == "" {
@@ -100,7 +102,7 @@ func (s *Service) deleteDownstream(ctx context.Context, target Target, opts Dele
 	if in == nil || !in.Enabled {
 		return nil
 	}
-	return s.deleter.DeleteTarget(ctx, *in, target, opts)
+	return s.targets.DeleteTarget(ctx, *in, target, opts)
 }
 
 // removeRequest soft-removes a request: the row and its history stay, the

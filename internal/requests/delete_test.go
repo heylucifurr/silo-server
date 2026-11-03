@@ -10,9 +10,10 @@ import (
 // fakeDeleter records the targets the delete path hands to the download
 // service, and can fail on demand.
 type fakeDeleter struct {
-	mu    sync.Mutex
-	calls []Target
-	err   error
+	mu      sync.Mutex
+	calls   []Target
+	err     error
+	missing map[int64]bool
 }
 
 func (d *fakeDeleter) DeleteTarget(_ context.Context, _ Integration, target Target, _ DeleteOptions) error {
@@ -23,6 +24,15 @@ func (d *fakeDeleter) DeleteTarget(_ context.Context, _ Integration, target Targ
 	}
 	d.calls = append(d.calls, target)
 	return nil
+}
+
+func (d *fakeDeleter) TargetExists(_ context.Context, _ Integration, target Target) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.err != nil {
+		return false, d.err
+	}
+	return !d.missing[target.ID], nil
 }
 
 func (d *fakeDeleter) qualities() []Quality {
@@ -62,7 +72,7 @@ func TestDeleteRequestRemovesEveryTargetAndSoftRemoves(t *testing.T) {
 	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"), submittedTarget(Quality2160p, "seerr"))
 	deleter := &fakeDeleter{}
 	svc := newTestService(store)
-	svc.SetTargetDeleter(deleter)
+	svc.SetTargetService(deleter)
 
 	got, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{RemoveMedia: true})
 	if err != nil {
@@ -88,7 +98,7 @@ func TestDeleteRequestKeepsRemainingTarget(t *testing.T) {
 	store.integrations = []Integration{seerrInst("seerr", true)}
 	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"), submittedTarget(Quality2160p, "seerr"))
 	svc := newTestService(store)
-	svc.SetTargetDeleter(&fakeDeleter{})
+	svc.SetTargetService(&fakeDeleter{})
 
 	got, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{Qualities: []Quality{Quality1080p}})
 	if err != nil {
@@ -108,7 +118,7 @@ func TestDeleteRequestDownstreamErrorKeepsTheRow(t *testing.T) {
 	store.integrations = []Integration{seerrInst("seerr", true)}
 	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
 	svc := newTestService(store)
-	svc.SetTargetDeleter(&fakeDeleter{err: errors.New("seerr unreachable")})
+	svc.SetTargetService(&fakeDeleter{err: errors.New("seerr unreachable")})
 
 	_, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{})
 	if err == nil {
@@ -169,7 +179,7 @@ func TestDeleteRequestSiloOnlySkipsDownstream(t *testing.T) {
 	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
 	deleter := &fakeDeleter{}
 	svc := newTestService(store)
-	svc.SetTargetDeleter(deleter)
+	svc.SetTargetService(deleter)
 
 	got, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{SiloOnly: true})
 	if err != nil {
@@ -180,5 +190,52 @@ func TestDeleteRequestSiloOnlySkipsDownstream(t *testing.T) {
 	}
 	if len(deleter.calls) != 0 {
 		t.Fatalf("downstream calls = %v, want none for Silo-only", deleter.qualities())
+	}
+}
+
+// A request deleted in Seerr directly is retired by the reconcile pass instead
+// of sitting in Processing forever.
+func TestReconcileRetiresTargetsDeletedInSeerr(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seerrInst("seerr", true)}
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	store.candidates = []*Request{store.requests["r1"]}
+	deleter := &fakeDeleter{missing: map[int64]bool{1: true}}
+	svc := newTestService(store)
+	svc.SetRouterProvider(&fakeRouterProvider{})
+	svc.SetTargetService(deleter)
+
+	result, err := svc.ReconcileRequests(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if result.Removed != 1 {
+		t.Fatalf("removed = %d, want 1", result.Removed)
+	}
+	if got := store.requests["r1"]; got.Outcome != OutcomeRemoved {
+		t.Fatalf("outcome = %s, want removed", got.Outcome)
+	}
+}
+
+// A Seerr lookup that fails leaves the request alone: a dependency failure
+// must not silently delete it.
+func TestReconcileKeepsTargetsWhenSeerrIsUnreachable(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seerrInst("seerr", true)}
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	store.candidates = []*Request{store.requests["r1"]}
+	svc := newTestService(store)
+	svc.SetRouterProvider(&fakeRouterProvider{})
+	svc.SetTargetService(&fakeDeleter{err: errors.New("seerr unreachable")})
+
+	if _, err := svc.ReconcileRequests(context.Background(), 10); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	req := store.requests["r1"]
+	if req.Outcome != OutcomeActive {
+		t.Fatalf("outcome = %s, want active (Seerr was unreachable)", req.Outcome)
+	}
+	if targets, _ := store.ListTargets(context.Background(), "r1"); len(targets) != 1 {
+		t.Fatalf("targets = %+v, want the target kept", targets)
 	}
 }

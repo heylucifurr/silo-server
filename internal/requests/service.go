@@ -83,7 +83,7 @@ type Service struct {
 	animeIndex        AnimeIndex
 	presence          PresenceResolver
 	router            RequestRouterProvider
-	deleter           TargetDeleter
+	targets           TargetService
 	entitlements      EntitlementResolver
 	groupProvider     access.GroupPolicyProvider
 	users             access.UserRepository
@@ -1285,6 +1285,8 @@ func (s *Service) ReconcileRequests(ctx context.Context, limit int) (ReconcileRe
 			result.Deferred++
 		case reconcileSkipped:
 			result.Skipped++
+		case reconcileRemoved:
+			result.Removed++
 		}
 	}
 	if err := s.completeWaitingFromLibrary(ctx, 2*limit, &result); err != nil {
@@ -2732,6 +2734,7 @@ const (
 	reconcileCompleted   reconcileChange = "completed"
 	reconcileFailed      reconcileChange = "failed"
 	reconcileDeferred    reconcileChange = "deferred"
+	reconcileRemoved     reconcileChange = "removed"
 )
 
 // completeWaitingFromLibrary completes pending and recently failed requests
@@ -2886,6 +2889,18 @@ func (s *Service) reconcileRequest(ctx context.Context, req Request, fc *fulfill
 	change, err := s.applyTargetStatuses(ctx, targets, statuses)
 	if err != nil {
 		return reconcileUnchanged, err
+	}
+	// A request deleted in Seerr directly leaves its targets in flight; retire
+	// them so the request does not sit in Processing forever. A lookup that
+	// fails keeps the request as it is.
+	refreshed, err := s.store.ListTargets(ctx, req.ID)
+	if err != nil {
+		return reconcileUnchanged, err
+	}
+	if _, removed, err := s.retireMissingSeerrTargets(ctx, req, refreshed, fc); err != nil {
+		slog.WarnContext(ctx, "requests: reconcile Seerr existence check failed", "component", "requests", "request_id", req.ID, "err", err)
+	} else if removed {
+		return reconcileRemoved, checkErr
 	}
 	return change, checkErr
 }

@@ -697,6 +697,9 @@ type ReconcileResult struct {
 	Completed   int `json:"completed"`
 	Failed      int `json:"failed"`
 	Skipped     int `json:"skipped"`
+	// Removed counts requests retired because they no longer exist in their
+	// download service (deleted there directly).
+	Removed int `json:"removed"`
 	// Deferred counts submissions that failed and were rescheduled.
 	Deferred int `json:"deferred"`
 	Errors   int `json:"errors"`
