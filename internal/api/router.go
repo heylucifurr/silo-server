@@ -26,10 +26,10 @@ import (
 	"github.com/Silo-Server/silo-server/internal/ai/jobrunner"
 	"github.com/Silo-Server/silo-server/internal/ai/llm"
 	"github.com/Silo-Server/silo-server/internal/animeids"
+	"github.com/Silo-Server/silo-server/internal/anticipated"
 	"github.com/Silo-Server/silo-server/internal/api/handlers"
 	apimw "github.com/Silo-Server/silo-server/internal/api/middleware"
 	"github.com/Silo-Server/silo-server/internal/apiusage"
-	"github.com/Silo-Server/silo-server/internal/anticipated"
 	"github.com/Silo-Server/silo-server/internal/apiv2"
 	"github.com/Silo-Server/silo-server/internal/artworkurl"
 	"github.com/Silo-Server/silo-server/internal/auth"
@@ -1062,6 +1062,7 @@ func newChiRouter(deps Dependencies) chi.Router {
 		watchlistRequestWithdrawer = requestSvc
 		requestSvc.SetWatchlistPreference(mediarequests.StoreWatchlistPreference{Stores: deps.UserStoreProvider})
 		AttachRequestRouter(requestSvc, deps.PluginService)
+		AttachRequestTargets(requestSvc)
 		requestSvc.SetAnimeIndex(animeids.NewStore(deps.DB))
 		requestSvc.SetGroupPolicyProvider(accessGroupStore)
 		if userRepo != nil {
@@ -2184,9 +2185,9 @@ func newChiRouter(deps Dependencies) chi.Router {
 		// snapshot table; the upstream fetch happens out-of-band in the refresh
 		// task, so the read path never calls the provider.
 		sectionFetcher.TrendingSnapshots = sections.NewTrendingSnapshotRepository(deps.DB)
-	// The anticipated row reads the curated list and matches it to the library.
-	sectionFetcher.Anticipated = anticipated.NewStore(deps.DB)
-	sectionFetcher.AnticipatedResolver = catalog.NewItemRepository(deps.DB)
+		// The anticipated row reads the curated list and matches it to the library.
+		sectionFetcher.Anticipated = anticipated.NewStore(deps.DB)
+		sectionFetcher.AnticipatedResolver = catalog.NewItemRepository(deps.DB)
 		sectionFetcher.SeasonalLists = sections.NewSeasonalListRepository(deps.DB)
 		if sectionFetcher.RecommendationRepo != nil {
 			sectionFetcher.SeasonalNeighbors = sectionFetcher.RecommendationRepo

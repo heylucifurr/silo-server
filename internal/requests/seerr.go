@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -105,7 +106,20 @@ func (c *SeerrClient) DeleteTarget(ctx context.Context, in Integration, target T
 			}
 		}
 	}
-	return c.deleteRequest(ctx, in, externalID)
+	if err := c.deleteRequest(ctx, in, externalID); err != nil {
+		return err
+	}
+	// A destructive call worth seeing in the log: which connection lost the
+	// request, and how much of it went with it.
+	slog.InfoContext(ctx, "seerr: deleted request",
+		"component", "requests",
+		"connection", in.Name,
+		"request_id", externalID,
+		"media_id", mediaID,
+		"removed_media", opts.RemoveMedia,
+		"deleted_files", opts.DeleteFiles,
+	)
+	return nil
 }
 
 // getRequest reads a request, or (nil, nil) when Seerr no longer has it.

@@ -3528,7 +3528,7 @@ func main() {
 		api.AttachRequestRouter(requestReconcileSvc, pluginService)
 		// Seerr's own REST API, for the operations the request router protocol
 		// does not expose: the admin delete and the reconcile existence check.
-		requestReconcileSvc.SetTargetService(mediarequests.NewSeerrClient(nil))
+		api.AttachRequestTargets(requestReconcileSvc)
 		requestReconcileSvc.SetGroupPolicyProvider(accessGroupStore)
 		if userStoreProvider != nil {
 			userRepo := auth.NewUserRepository(deps.DB)

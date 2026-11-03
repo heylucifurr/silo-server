@@ -21,6 +21,11 @@ type TargetService interface {
 // reconcile pass use.
 func (s *Service) SetTargetService(t TargetService) { s.targets = t }
 
+// HasTargetService reports whether a download-service client is wired. The HTTP
+// API and the reconcile task each build their own requests service, so a wiring
+// test asserts both got one.
+func (s *Service) HasTargetService() bool { return s != nil && s.targets != nil }
+
 // DeleteRequest removes a request from Silo, admin only. For each selected
 // quality the target is removed from its download service first (unless
 // SiloOnly, or it was never submitted), then from Silo. When no target
@@ -84,13 +89,19 @@ func (s *Service) DeleteRequest(ctx context.Context, viewer Viewer, id string, o
 
 // deleteDownstream hands a submitted target to the download-service deleter.
 // A target with no external id was never sent, and one whose server is gone or
-// disabled has nothing to remove, so both are removed from Silo only.
+// disabled has nothing to remove, so both are removed from Silo only. A delete
+// that asked for the download server to be cleared and has no client to do it
+// with fails instead of closing the Silo record alone: a silent no-op would
+// strand the download, and the admin can retry or pick Silo-only.
 func (s *Service) deleteDownstream(ctx context.Context, target Target, opts DeleteOptions) error {
-	if opts.SiloOnly || s.targets == nil {
+	if opts.SiloOnly {
 		return nil
 	}
 	if strings.TrimSpace(target.ExternalID) == "" || strings.TrimSpace(target.IntegrationID) == "" {
 		return nil
+	}
+	if s.targets == nil {
+		return errors.New("requests: no download-service client is configured; retry, or delete from Silo only")
 	}
 	in, err := s.store.GetIntegration(ctx, target.IntegrationID)
 	if err != nil {

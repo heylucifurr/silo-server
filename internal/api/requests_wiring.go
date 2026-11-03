@@ -52,3 +52,16 @@ func AttachRequestRouter(svc *mediarequests.Service, pluginService *plugins.Serv
 	}
 	svc.SetRouterProvider(mediarequests.NewPluginRouterProvider(PluginRequestRouterAdapter{pluginService}))
 }
+
+// AttachRequestTargets wires the download-service client (Seerr's own REST API)
+// onto a requests service. The admin delete uses it to remove a request from
+// Seerr, and the reconcile pass uses it to notice a request Seerr no longer has.
+// The HTTP handler and the reconcile task each build their own requests
+// service, so both call this: a service served by the API that missed it would
+// close a request in Silo while leaving the download in Seerr.
+func AttachRequestTargets(svc *mediarequests.Service) {
+	if svc == nil {
+		return
+	}
+	svc.SetTargetService(mediarequests.NewSeerrClient(nil))
+}

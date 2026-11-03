@@ -239,3 +239,40 @@ func TestReconcileKeepsTargetsWhenSeerrIsUnreachable(t *testing.T) {
 		t.Fatalf("targets = %+v, want the target kept", targets)
 	}
 }
+
+// A delete that asked for the download server to be cleared must not close the
+// Silo record when no client is wired: the download would be stranded, and the
+// history would claim it was removed.
+func TestDeleteRequestFailsWithoutADownloadServiceClient(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seerrInst("seerr", true)}
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	svc := newTestService(store) // deliberately no SetTargetService
+
+	_, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{RemoveMedia: true})
+	if err == nil {
+		t.Fatal("DeleteRequest succeeded with no download-service client; want an error")
+	}
+	if got := store.requests["r1"]; got.Outcome != OutcomeActive {
+		t.Fatalf("outcome = %s, want active: the record must stay open so the admin can retry", got.Outcome)
+	}
+	if targets, _ := store.ListTargets(context.Background(), "r1"); len(targets) != 1 {
+		t.Fatalf("targets = %+v, want the target kept", targets)
+	}
+}
+
+// Silo-only is the escape hatch: it closes the record with no client at all.
+func TestDeleteRequestSiloOnlyNeedsNoDownloadServiceClient(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seerrInst("seerr", true)}
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	svc := newTestService(store)
+
+	got, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{SiloOnly: true})
+	if err != nil {
+		t.Fatalf("DeleteRequest: %v", err)
+	}
+	if got.Outcome != OutcomeRemoved {
+		t.Fatalf("outcome = %s, want removed", got.Outcome)
+	}
+}
