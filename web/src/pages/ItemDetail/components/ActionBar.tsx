@@ -220,13 +220,15 @@ function SplitPrimaryAction({
         )}
         {action.label}
       </Button>
+      {/* The 4K segment wears the brand red rather than the theme's primary, so
+          it reads as its own choice next to the request itself. */}
       <button
         type="button"
         onClick={trailing.onClick}
         disabled={trailingInert}
         aria-busy={trailing.pending || undefined}
         aria-label={trailing.ariaLabel ?? trailing.label}
-        className={`inline-flex h-11 items-center gap-2 rounded-none bg-black px-4 text-[0.9375rem] font-bold tracking-wide text-white transition-colors enabled:cursor-pointer enabled:hover:bg-black/85 disabled:opacity-60 ${trailing.className ?? ""}`}
+        className={`inline-flex h-11 items-center gap-2 rounded-none bg-[#c11e1e] px-4 text-[0.9375rem] font-bold tracking-wide text-white transition-colors enabled:cursor-pointer enabled:hover:bg-[#c11e1e]/85 disabled:opacity-60 ${trailing.className ?? ""}`}
       >
         {TrailingIcon && (
           <TrailingIcon
