@@ -213,6 +213,35 @@ func (r *Repository) DeleteTarget(ctx context.Context, id int64) error {
 	return nil
 }
 
+// RemoveTarget deletes one target and recomputes its request's status and
+// outcome from the remaining targets, in one transaction. The admin delete
+// path uses it: a request whose last target is removed ends up approved/active
+// here and is then soft-removed by the caller, while a request with a
+// remaining target keeps the aggregate those targets imply.
+func (r *Repository) RemoveTarget(ctx context.Context, targetID int64, actor Viewer) (*Request, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin remove target transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var requestID string
+	if err := tx.QueryRow(ctx, `DELETE FROM media_request_targets WHERE id = $1 RETURNING request_id`, targetID).Scan(&requestID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("remove target: %w", err)
+	}
+	req, err := r.recomputeAggregate(ctx, tx, requestID, actor)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit remove target transaction: %w", err)
+	}
+	return req, nil
+}
+
 // UpdateTargetStatus updates one target and recomputes the parent request's
 // aggregate status/outcome, all in one transaction. A target that completes
 // or fails loses its download progress.
@@ -316,7 +345,7 @@ func (r *Repository) recomputeAggregate(ctx context.Context, exec requestExecuto
 		Scan(&prevStatus, &prevOutcome); err != nil {
 		return nil, fmt.Errorf("load request status: %w", err)
 	}
-	if prevOutcome == OutcomeDeclined || prevOutcome == OutcomeCancelled {
+	if prevOutcome == OutcomeDeclined || prevOutcome == OutcomeCancelled || prevOutcome == OutcomeRemoved {
 		// A closed request stays closed: a target reporting late (say, after
 		// an admin closed a failed request) updates only itself.
 		req, err := scanRequest(exec.QueryRow(ctx, requestSelectSQL()+` WHERE id = $1`, requestID))

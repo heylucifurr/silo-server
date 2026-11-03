@@ -121,6 +121,11 @@ type Store interface {
 	ListTargetsForRequests(ctx context.Context, requestIDs []string) (map[string][]Target, error)
 	CreateTarget(ctx context.Context, target Target) (Target, error)
 	DeleteTarget(ctx context.Context, id int64) error
+	// RemoveTarget deletes one target and recomputes its request's status and
+	// outcome from the remaining targets, in one transaction.
+	RemoveTarget(ctx context.Context, targetID int64, actor Viewer) (*Request, error)
+	// RecordEvent appends a history entry to a request.
+	RecordEvent(ctx context.Context, requestID, eventType string, actor Viewer, message string) error
 	// UpdateTargetStatus also clears the target's download progress when it
 	// completes or fails.
 	UpdateTargetStatus(ctx context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, actor Viewer) (*Request, error)

@@ -788,7 +788,7 @@ func (r *Repository) SetOutcome(ctx context.Context, id string, from StateGuard,
 	// go in the same transaction. Once this commits, another request for the
 	// title can open and gather followers, and a cleanup run after the commit
 	// would remove theirs.
-	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled || outcome == OutcomeRemoved {
 		if err := forgetTitleFollows(ctx, tx, req); err != nil {
 			return nil, err
 		}
@@ -1373,6 +1373,11 @@ func (r *Repository) deleteIntegration(ctx context.Context, tx pgx.Tx, id string
 		return fmt.Errorf("delete request integration: %w", err)
 	}
 	return nil
+}
+
+// RecordEvent appends a history entry to a request outside a transaction.
+func (r *Repository) RecordEvent(ctx context.Context, requestID, eventType string, actor Viewer, message string) error {
+	return r.recordEvent(ctx, r.pool, requestID, eventType, actor, message)
 }
 
 func (r *Repository) recordEvent(ctx context.Context, exec requestExecutor, requestID, eventType string, actor Viewer, message string) error {

@@ -1690,7 +1690,7 @@ func (f *fakeStore) SetOutcome(_ context.Context, id string, from StateGuard, ou
 	}
 	req.Outcome = outcome
 	req.LastError = message
-	if outcome == OutcomeDeclined || outcome == OutcomeCancelled {
+	if outcome == OutcomeDeclined || outcome == OutcomeCancelled || outcome == OutcomeRemoved {
 		req.OutcomeReason = message
 		for key := range f.follows {
 			if f.followFor[key] == req.ID {
@@ -2136,6 +2136,41 @@ func (f *fakeStore) DeleteTarget(_ context.Context, id int64) error {
 		}
 	}
 	return ErrNotFound
+}
+
+// RemoveTarget mirrors the repository: it drops the target and returns its
+// request. The fake does not recompute the aggregate; tests that need that set
+// it themselves.
+func (f *fakeStore) RemoveTarget(_ context.Context, targetID int64, _ Viewer) (*Request, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for rid, ts := range f.targets {
+		for i := range ts {
+			if ts[i].ID != targetID {
+				continue
+			}
+			f.targets[rid] = append(ts[:i], ts[i+1:]...)
+			req := f.lookupLocked(rid)
+			if req == nil {
+				return nil, ErrNotFound
+			}
+			cp := *req
+			return &cp, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (f *fakeStore) RecordEvent(_ context.Context, requestID, eventType string, _ Viewer, message string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.events == nil {
+		f.events = map[string][]RequestEvent{}
+	}
+	f.events[requestID] = append(f.events[requestID], RequestEvent{
+		RequestID: requestID, EventType: eventType, Message: message,
+	})
+	return nil
 }
 
 func (f *fakeStore) UpdateTargetStatus(_ context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, _ Viewer) (*Request, error) {

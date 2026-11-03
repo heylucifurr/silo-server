@@ -589,6 +589,20 @@ type CreateRequestInput struct {
 	Qualities []Quality `json:"-"`
 }
 
+// DeleteOptions says what an admin's delete does for a request. Qualities
+// selects the targets to remove; empty means every target.
+type DeleteOptions struct {
+	Qualities []Quality
+	// RemoveMedia also removes the title from its download service, which
+	// cancels its download.
+	RemoveMedia bool
+	// DeleteFiles also deletes the downloaded files.
+	DeleteFiles bool
+	// SiloOnly skips the download service and only removes the Silo record,
+	// for an admin cleaning up when the service is unreachable.
+	SiloOnly bool
+}
+
 // RequestPageKey identifies the last emitted request in descending creation order.
 type RequestPageKey struct {
 	CreatedAt time.Time `json:"created_at"`

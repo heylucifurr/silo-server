@@ -83,6 +83,7 @@ type Service struct {
 	animeIndex        AnimeIndex
 	presence          PresenceResolver
 	router            RequestRouterProvider
+	deleter           TargetDeleter
 	entitlements      EntitlementResolver
 	groupProvider     access.GroupPolicyProvider
 	users             access.UserRepository
