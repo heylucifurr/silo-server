@@ -16,11 +16,22 @@ reconcile locks).
 A request row carries two fields:
 
 - `status`: `pending → approved → queued → downloading → completed`.
-- `outcome`: `active`, or the terminal `declined`, `cancelled`, `failed`.
+- `outcome`: `active`, or the terminal `declined`, `cancelled`, `failed`,
+  `removed`.
 
 It also records its `source`: `direct` when someone requested the title, or
 `watchlist` when a watchlist add made the request (see
 [Watchlist requests](#watchlist-requests)). The source never changes.
+
+Each request records `requested_qualities`: `1080p`, `2160p`, or both. Only an
+admin account may ask for 2160p; anyone else requests HD, and the server-wide
+`force_dual_quality` switch adds 4K to an admin's request. The stored set is
+authoritative at submission — the target fan-out reads it — and a row written
+before the column existed (no qualities) falls back to the older rule of HD plus
+4K for an admin under the switch. Because the set is per request, one title can
+hold an HD request and a 4K request at once: the overlap check treats the two
+sets as separate claims, so requesting 4K after HD is allowed and the reverse
+too.
 
 Once a request is submitted, it fans out into one `media_request_targets` row per
 quality. Each target change recomputes the request's status and outcome in the
@@ -483,6 +494,15 @@ the requests it has not reached for the next pass, so it always ends inside the
 reconcile pass's wait, even while a download server stops answering and every
 call to it runs to the router's 60-second deadline.
 
+A pass also asks the download service itself whether each in-flight target's
+request still exists. The request-router protocol has no such call, so the host
+calls Seerr's REST API directly (`internal/requests/seerr.go`, wired as the
+service's `TargetService`). A target the service no longer has is removed, and a
+request whose last target is gone closes as `removed` with an
+`removed_in_seerr` event, so a request deleted in Seerr by hand does not sit in
+progress forever. A lookup that fails leaves the request exactly as it is: an
+unreachable service must not delete anything.
+
 ## Download progress
 
 While a target downloads, its router plugin can report how far along it is in
@@ -601,7 +621,7 @@ its own account's requests, including ones its household's other profiles made.
 The admin queue groups requests by what an admin does next, from status and
 outcome alone so the database can filter and count them: needs approval
 (pending), in progress (approved, queued or downloading), failed, and done
-(completed, or closed by a decline or cancellation). An admin can retry a
+(completed, or closed by a decline, cancellation or removal). An admin can retry a
 failed request or close it, which moves it to done (v2 only; the v1 cancel
 still refuses a failed request). A closed request stays closed: a target that
 reports later updates only itself. A request's
@@ -609,6 +629,14 @@ history is its `media_request_events` rows. Target updates record the
 request's status or outcome only when it changes, so neither a reconcile pass
 nor a second target repeats an entry. The queue shows a request with source
 `watchlist` as "via watchlist".
+
+An admin can also delete a request outright (`POST
+/api/v2/admin/requests/{id}/delete`, admins only). The Silo record closes as
+`removed` — a soft removal, so the row and its history stay for the audit trail
+— and, unless the caller asks for Silo only, the request is deleted from the
+download service through its own API, with its files when asked. Delete is the
+tool for a request Silo no longer wants but the download service still holds;
+cancelling cannot reach a request that has already been sent.
 
 ## Who can request
 
