@@ -230,16 +230,42 @@ describe("RequestActionBar 4K choice", () => {
     expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
   });
 
-  it("hides the 4K segment once the request already includes 4K", () => {
+  it("shows the 4K segment as already requested, not clickable, once it is asked for", () => {
     with4K();
     renderBar({
       ...heat,
       request: {
         requestable: false,
         status: "approved",
+        state: "approved",
         requested_qualities: ["1080p", "2160p"],
       },
     });
+
+    // The segment stays put as a settled state rather than disappearing, and it
+    // wears a tick: there is nothing left to ask for.
+    const segment = screen.getByRole("button", { name: "4K requested" });
+    expect(segment).toBeDisabled();
+    expect(segment.querySelector(".lucide-circle-check")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
+  });
+
+  it("keeps the 4K segment clickable while the request covers HD alone", () => {
+    const mutate = vi.fn();
+    mocks.createRequest.mockReturnValue({ mutate, isPending: false });
+    with4K();
+    renderBar({
+      ...heat,
+      request: {
+        requestable: false,
+        status: "pending",
+        state: "pending",
+        requested_qualities: ["1080p"],
+      },
+    });
+
+    const segment = screen.getByRole("button", { name: "Request 4K" });
+    expect(segment).toBeEnabled();
+    expect(segment.querySelector(".lucide-download")).toBeTruthy();
   });
 });

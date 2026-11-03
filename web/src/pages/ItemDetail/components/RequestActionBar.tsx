@@ -104,25 +104,34 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
   // requests. A series with a season picker chooses its quality in the dialog.
   const fourK = request4KCapability(featureStatus.data);
   const requestedQualities = item.request.requested_qualities ?? [];
+  // The 4K segment is a marker as much as a button. Once the request covers 4K
+  // it stays in place as a settled state, the way the request button beside it
+  // does, instead of vanishing: a tick that is not clickable.
   const fourKTrailing =
-    fourK.canRequest4K && fourK.available && !inLibrary && !seasonPicker &&
-    !requestedQualities.includes("2160p")
-      ? {
-          label: "4K",
-          icon: Download,
-          ariaLabel: "Request 4K",
-          pending: createRequest.isPending,
-          // Add 4K next to an HD copy, or on its own when HD is already asked for.
-          onClick: () =>
-            createRequest.mutate(
-              requestInputFromMediaResult(
-                item,
-                requestedQualities.includes("1080p")
-                  ? (["2160p"] as RequestQuality[])
-                  : (["1080p", "2160p"] as RequestQuality[]),
+    fourK.canRequest4K && fourK.available && !inLibrary && !seasonPicker
+      ? requestedQualities.includes("2160p")
+        ? {
+            label: "4K",
+            icon: CircleCheck,
+            ariaLabel: "4K requested",
+            disabled: true,
+          }
+        : {
+            label: "4K",
+            icon: Download,
+            ariaLabel: "Request 4K",
+            pending: createRequest.isPending,
+            // Add 4K next to an HD copy, or on its own when HD is already asked for.
+            onClick: () =>
+              createRequest.mutate(
+                requestInputFromMediaResult(
+                  item,
+                  requestedQualities.includes("1080p")
+                    ? (["2160p"] as RequestQuality[])
+                    : (["1080p", "2160p"] as RequestQuality[]),
+                ),
               ),
-            ),
-        }
+          }
       : undefined;
 
   let primaryAction: ActionBarPrimaryAction;
