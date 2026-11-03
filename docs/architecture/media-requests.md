@@ -638,8 +638,16 @@ Sonarr and the request is deleted from Seerr. Delete is the tool for a request
 Silo no longer wants but the download service still holds; cancelling cannot
 reach a request that has already been sent.
 
-Three details of that call matter, each learned the hard way:
+These details of that call matter, each learned the hard way:
 
+- One call covers both services: Seerr picks Radarr or Sonarr from the media
+  type. A movie goes through Radarr's `removeMovie`, a series through Sonarr's
+  `removeSeries` — and that is the **whole series**, files included
+  (`DELETE /api/v3/series/{id}?deleteFiles=true`), not the seasons a request
+  named. Deleting a season request therefore takes seasons already in the
+  library out of Sonarr too, which is why the dialog says so before it runs.
+- Both need a **default** Radarr or Sonarr for that variant, or the media row's
+  recorded service id; with neither, Seerr answers 409 and nothing is removed.
 - Seerr's "remove from Radarr or Sonarr" call is `DELETE /media/{id}/file?is4k=`.
   It deletes the files with the title and takes no switch for keeping them, so
   there is one download-server choice, not a remove and a separate delete-files.

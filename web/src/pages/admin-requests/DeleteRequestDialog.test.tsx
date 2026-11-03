@@ -52,6 +52,20 @@ describe("DeleteRequestDialog", () => {
     expect(screen.queryByRole("checkbox", { name: /delete the downloaded files/ })).toBeNull();
   });
 
+  it("says a series goes from Sonarr whole, not just its requested seasons", () => {
+    render(
+      <DeleteRequestDialog
+        request={{ ...request, media_type: "series" }}
+        open
+        onOpenChange={() => {}}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Removes the whole series from Sonarr/)).toBeInTheDocument();
+    expect(screen.queryByText(/Removes the movie from Radarr/)).toBeNull();
+  });
+
   it("closes the Silo record only when the download-server box is cleared", () => {
     const onConfirm = vi.fn();
     openDialog(onConfirm);

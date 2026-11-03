@@ -58,6 +58,10 @@ function DeleteRequestContent({
 }) {
   const id = useId();
   const [removeMedia, setRemoveMedia] = useState(true);
+  // Seerr removes a whole series from Sonarr, not the seasons a request named,
+  // so the copy has to say so: a season request would otherwise read as though
+  // it only touched those seasons.
+  const isSeries = request?.media_type === "series";
 
   return (
     <AlertDialogContent>
@@ -79,8 +83,11 @@ function DeleteRequestContent({
           <span>
             Also remove it from the download server
             <span className="text-muted-foreground block text-xs">
-              Removes the title from Radarr or Sonarr and deletes its files. Leave this off when the
-              server cannot be reached: Silo closes its own record and the server keeps the title.
+              {isSeries
+                ? "Removes the whole series from Sonarr and deletes its files, not just the seasons this request asked for."
+                : "Removes the movie from Radarr and deletes its files."}{" "}
+              Leave this off when the server cannot be reached: Silo closes its own record and the
+              server keeps the {isSeries ? "series" : "movie"}.
             </span>
           </span>
         </label>
