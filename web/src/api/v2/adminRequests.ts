@@ -418,10 +418,11 @@ export function declineAdminRequestV2(id: string, reason?: string) {
 
 /** What an admin delete removes beyond the request itself. */
 export interface AdminRequestDeleteOptions {
-  /** Also remove the title from its download server, cancelling the download. */
+  /**
+   * Also remove the title from its download server (Radarr or Sonarr). Seerr
+   * deletes the files with it: its remove call has no switch for keeping them.
+   */
   removeMedia?: boolean;
-  /** Also delete the downloaded files. */
-  deleteFiles?: boolean;
   /** Close the Silo record without touching the download server. */
   siloOnly?: boolean;
   /** The qualities to delete; omitted deletes every quality the request holds. */
@@ -430,14 +431,13 @@ export interface AdminRequestDeleteOptions {
 
 /**
  * An admin deletes a request: its Silo record is closed (outcome `removed`) and,
- * unless `siloOnly`, its download is cancelled on the download server.
+ * unless `siloOnly`, its download is removed from the download server.
  */
 export function deleteAdminRequestV2(id: string, options: AdminRequestDeleteOptions = {}) {
   return v2("POST /api/v2/admin/requests/{id}/delete", {
     path: { id },
     body: {
       remove_media: options.removeMedia,
-      delete_files: options.deleteFiles,
       silo_only: options.siloOnly,
       qualities: options.qualities,
     },

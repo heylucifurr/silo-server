@@ -168,8 +168,7 @@ type AdminRequestActionInput struct {
 		// Delete only: what to remove on the download server, beyond the
 		// request itself. SiloOnly keeps the request there and only closes
 		// the Silo record.
-		RemoveMedia bool     `json:"remove_media,omitempty" doc:"Delete only: also remove the title from its download server, cancelling the download"`
-		DeleteFiles bool     `json:"delete_files,omitempty" doc:"Delete only: also delete the downloaded files"`
+		RemoveMedia bool     `json:"remove_media,omitempty" doc:"Delete only: also remove the title from its download server, which cancels the download and deletes its files"`
 		SiloOnly    bool     `json:"silo_only,omitempty" doc:"Delete only: close the Silo record without touching the download server"`
 		Qualities   []string `json:"qualities,omitempty" enum:"1080p,2160p" maxItems:"2" doc:"Delete only: the qualities to delete. Omitted: every quality the request holds"`
 	}
@@ -276,7 +275,6 @@ func registerAdminRequests(reg *Registry) {
 				}
 				r, err = deleter.DeleteRequest(ctx, v, string(in.ID), mediarequests.DeleteOptions{
 					RemoveMedia: in.Body.RemoveMedia,
-					DeleteFiles: in.Body.DeleteFiles,
 					SiloOnly:    in.Body.SiloOnly,
 					Qualities:   requestQualitiesFromStrings(in.Body.Qualities),
 				})

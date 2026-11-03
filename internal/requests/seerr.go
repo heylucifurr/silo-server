@@ -73,16 +73,28 @@ func (c *SeerrClient) TargetExists(ctx context.Context, in Integration, target T
 }
 
 // DeleteTarget removes a submitted target from Seerr. The request is resolved
-// first so its media id is known, then the requested downstream cleanup runs
-// (files, then the media entry), and the request is deleted last: a failure
-// leaves the request in Seerr so the admin can retry. A 404 on any step is
-// treated as already done, so a retry after a partial success converges.
+// first so its media entry and variant are known, then the title is dropped from
+// the download service: Seerr's DELETE /media/{id}/file is its own "remove from
+// Radarr or Sonarr" action and also deletes the files (Seerr exposes no switch
+// for keeping them), and DELETE /request/{id} removes the request itself. The
+// request goes last, so a failure leaves it in Seerr to retry, and a 404 on any
+// step counts as already done, so a retry after a partial success converges.
+//
+// Seerr keeps ONE media row per title, shared by its HD and 4K variants
+// (status/status4k, serviceId/serviceId4k), so this never deletes that row:
+// deleting it for the HD variant takes the 4K variant's media id with it, and
+// the 4K download is then stranded in Radarr with nothing left to name it.
 func (c *SeerrClient) DeleteTarget(ctx context.Context, in Integration, target Target, opts DeleteOptions) error {
 	if c == nil || in.CapabilityID != seerrCapabilityID {
 		return nil
 	}
 	externalID := strings.TrimSpace(target.ExternalID)
 	if externalID == "" {
+		return nil
+	}
+	if opts.SiloOnly {
+		// The service never calls this for a Silo-only delete; refusing here too
+		// keeps a future caller from wiping a download the admin meant to keep.
 		return nil
 	}
 	req, err := c.getRequest(ctx, in, externalID)
@@ -94,30 +106,28 @@ func (c *SeerrClient) DeleteTarget(ctx context.Context, in Integration, target T
 		mediaID = req.Media.ID
 	}
 	is4K := req != nil && req.Is4K
-	if mediaID > 0 {
-		if opts.DeleteFiles {
-			if err := c.deleteMediaFile(ctx, in, mediaID, is4K); err != nil {
-				return err
-			}
+	if opts.RemoveMedia {
+		if mediaID <= 0 {
+			// Seerr names no media entry for the request, so nothing can remove
+			// the title from Radarr or Sonarr. Refusing beats closing the Silo
+			// record and leaving the download behind.
+			return fmt.Errorf("seerr: request %s has no media entry, so its Radarr or Sonarr copy cannot be removed; delete it there by hand, or delete from Silo only", externalID)
 		}
-		if opts.RemoveMedia {
-			if err := c.deleteMedia(ctx, in, mediaID); err != nil {
-				return err
-			}
+		if err := c.deleteMediaFile(ctx, in, mediaID, is4K); err != nil {
+			return err
 		}
 	}
 	if err := c.deleteRequest(ctx, in, externalID); err != nil {
 		return err
 	}
 	// A destructive call worth seeing in the log: which connection lost the
-	// request, and how much of it went with it.
+	// request, and whether its download went with it.
 	slog.InfoContext(ctx, "seerr: deleted request",
 		"component", "requests",
 		"connection", in.Name,
 		"request_id", externalID,
 		"media_id", mediaID,
 		"removed_media", opts.RemoveMedia,
-		"deleted_files", opts.DeleteFiles,
 	)
 	return nil
 }
@@ -144,10 +154,6 @@ func (c *SeerrClient) getRequest(ctx context.Context, in Integration, externalID
 
 func (c *SeerrClient) deleteRequest(ctx context.Context, in Integration, externalID string) error {
 	return c.delete(ctx, in, "/api/v1/request/"+url.PathEscape(externalID), nil)
-}
-
-func (c *SeerrClient) deleteMedia(ctx context.Context, in Integration, mediaID int) error {
-	return c.delete(ctx, in, "/api/v1/media/"+strconv.Itoa(mediaID), nil)
 }
 
 func (c *SeerrClient) deleteMediaFile(ctx context.Context, in Integration, mediaID int, is4K bool) error {

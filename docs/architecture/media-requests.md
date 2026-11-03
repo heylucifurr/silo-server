@@ -633,10 +633,24 @@ nor a second target repeats an entry. The queue shows a request with source
 An admin can also delete a request outright (`POST
 /api/v2/admin/requests/{id}/delete`, admins only). The Silo record closes as
 `removed` — a soft removal, so the row and its history stay for the audit trail
-— and, unless the caller asks for Silo only, the request is deleted from the
-download service through its own API, with its files when asked. Delete is the
-tool for a request Silo no longer wants but the download service still holds;
-cancelling cannot reach a request that has already been sent.
+— and, unless the caller asks for Silo only, the title is removed from Radarr or
+Sonarr and the request is deleted from Seerr. Delete is the tool for a request
+Silo no longer wants but the download service still holds; cancelling cannot
+reach a request that has already been sent.
+
+Three details of that call matter, each learned the hard way:
+
+- Seerr's "remove from Radarr or Sonarr" call is `DELETE /media/{id}/file?is4k=`.
+  It deletes the files with the title and takes no switch for keeping them, so
+  there is one download-server choice, not a remove and a separate delete-files.
+- It never deletes Seerr's media row. Seerr keeps **one row per title for both
+  variants** (`status`/`status4k`, `serviceId`/`serviceId4k`), so deleting that
+  row for the HD variant takes the 4K variant's media id with it, and the 4K
+  download is stranded in Radarr with nothing left in Seerr to name it.
+- A request for which Seerr names no media entry fails the delete rather than
+  closing the Silo record alone: the title would stay in Radarr or Sonarr with
+  nothing pointing at it. The admin removes it there by hand, or deletes Silo
+  only.
 
 ## Who can request
 

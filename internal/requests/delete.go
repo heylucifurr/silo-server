@@ -144,13 +144,10 @@ func deleteMessage(target Target, opts DeleteOptions) string {
 	if target.Quality != "" {
 		b.WriteString(" " + string(target.Quality))
 	}
-	switch {
-	case opts.SiloOnly:
+	if opts.SiloOnly {
 		b.WriteString(" from Silo only")
-	case opts.DeleteFiles:
-		b.WriteString(", its download and its files")
-	case opts.RemoveMedia:
-		b.WriteString(" and its download")
+	} else {
+		b.WriteString(" from Silo and its download server")
 	}
 	return b.String()
 }

@@ -603,11 +603,10 @@ type CreateRequestInput struct {
 // selects the targets to remove; empty means every target.
 type DeleteOptions struct {
 	Qualities []Quality
-	// RemoveMedia also removes the title from its download service, which
-	// cancels its download.
+	// RemoveMedia removes the title from its download service, which cancels the
+	// download. Seerr deletes the files with it: its "remove from Radarr or
+	// Sonarr" call takes no switch for keeping them.
 	RemoveMedia bool
-	// DeleteFiles also deletes the downloaded files.
-	DeleteFiles bool
 	// SiloOnly skips the download service and only removes the Silo record,
 	// for an admin cleaning up when the service is unreachable.
 	SiloOnly bool

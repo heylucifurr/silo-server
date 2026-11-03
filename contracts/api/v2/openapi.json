@@ -16565,10 +16565,6 @@
       "AdminRequestActionInputBody": {
         "additionalProperties": false,
         "properties": {
-          "delete_files": {
-            "description": "Delete only: also delete the downloaded files",
-            "type": "boolean"
-          },
           "qualities": {
             "description": "Delete only: the qualities to delete. Omitted: every quality the request holds",
             "items": {
@@ -16585,7 +16581,7 @@
             "type": "string"
           },
           "remove_media": {
-            "description": "Delete only: also remove the title from its download server, cancelling the download",
+            "description": "Delete only: also remove the title from its download server, which cancels the download and deletes its files",
             "type": "boolean"
           },
           "silo_only": {

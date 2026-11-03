@@ -19166,12 +19166,10 @@ export interface components {
       status: "started";
     };
     AdminRequestActionInputBody: {
-      /** @description Delete only: also delete the downloaded files */
-      delete_files?: boolean;
       /** @description Delete only: the qualities to delete. Omitted: every quality the request holds */
       qualities?: ("1080p" | "2160p")[];
       reason?: string;
-      /** @description Delete only: also remove the title from its download server, cancelling the download */
+      /** @description Delete only: also remove the title from its download server, which cancels the download and deletes its files */
       remove_media?: boolean;
       /** @description Delete only: close the Silo record without touching the download server */
       silo_only?: boolean;

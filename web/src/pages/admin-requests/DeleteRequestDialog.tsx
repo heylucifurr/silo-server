@@ -14,11 +14,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 
 /**
- * Confirms deleting a request, and asks what else to remove: the request is
- * always closed in Silo (outcome `removed`); its download server entry and the
- * downloaded files are opt-in. Unchecking the download-server box is the escape
- * hatch for a server that cannot be reached, which leaves it holding the
- * request.
+ * Confirms deleting a request, and asks whether the download server loses it
+ * too: the request is always closed in Silo (outcome `removed`), and the title
+ * is removed from Radarr or Sonarr unless the admin asks for Silo only. There is
+ * one download-server choice, not two: Seerr's remove call deletes the files
+ * with the title and offers no switch for keeping them.
  */
 export function DeleteRequestDialog({
   request,
@@ -58,7 +58,6 @@ function DeleteRequestContent({
 }) {
   const id = useId();
   const [removeMedia, setRemoveMedia] = useState(true);
-  const [deleteFiles, setDeleteFiles] = useState(false);
 
   return (
     <AlertDialogContent>
@@ -75,31 +74,13 @@ function DeleteRequestContent({
           <Checkbox
             id={`${id}-server`}
             checked={removeMedia}
-            onCheckedChange={(checked) => {
-              const on = checked === true;
-              setRemoveMedia(on);
-              if (!on) setDeleteFiles(false);
-            }}
+            onCheckedChange={(checked) => setRemoveMedia(checked === true)}
           />
           <span>
             Also remove it from the download server
             <span className="text-muted-foreground block text-xs">
-              Cancels its download. Leave this off when the server cannot be reached: Silo closes
-              its own record and the server keeps the request.
-            </span>
-          </span>
-        </label>
-        <label htmlFor={`${id}-files`} className="flex items-start gap-2.5">
-          <Checkbox
-            id={`${id}-files`}
-            checked={deleteFiles}
-            disabled={!removeMedia}
-            onCheckedChange={(checked) => setDeleteFiles(checked === true)}
-          />
-          <span>
-            Also delete the downloaded files
-            <span className="text-muted-foreground block text-xs">
-              Only what this request downloaded. A copy already in the library is untouched.
+              Removes the title from Radarr or Sonarr and deletes its files. Leave this off when the
+              server cannot be reached: Silo closes its own record and the server keeps the title.
             </span>
           </span>
         </label>
@@ -114,7 +95,6 @@ function DeleteRequestContent({
             onClick={() =>
               onConfirm({
                 removeMedia,
-                deleteFiles,
                 siloOnly: !removeMedia,
               })
             }

@@ -39,23 +39,17 @@ describe("DeleteRequestDialog", () => {
 
     expect(onConfirm).toHaveBeenCalledWith({
       removeMedia: true,
-      deleteFiles: false,
       siloOnly: false,
     });
   });
 
-  it("passes the file deletion on when it is asked for", () => {
-    const onConfirm = vi.fn();
-    openDialog(onConfirm);
+  it("offers one download-server choice, not a separate files one", () => {
+    openDialog(vi.fn());
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /delete the downloaded files/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete request" }));
-
-    expect(onConfirm).toHaveBeenCalledWith({
-      removeMedia: true,
-      deleteFiles: true,
-      siloOnly: false,
-    });
+    // Seerr deletes the files with the title and has no switch for keeping them,
+    // so a second box would promise something the server cannot do.
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.queryByRole("checkbox", { name: /delete the downloaded files/ })).toBeNull();
   });
 
   it("closes the Silo record only when the download-server box is cleared", () => {
@@ -63,14 +57,10 @@ describe("DeleteRequestDialog", () => {
     openDialog(onConfirm);
 
     fireEvent.click(screen.getByRole("checkbox", { name: /remove it from the download server/ }));
-    // The files box follows the server box: with the server left alone there
-    // is nothing for Silo to delete.
-    expect(screen.getByRole("checkbox", { name: /delete the downloaded files/ })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Delete request" }));
 
     expect(onConfirm).toHaveBeenCalledWith({
       removeMedia: false,
-      deleteFiles: false,
       siloOnly: true,
     });
   });
