@@ -25,6 +25,7 @@ import {
   approveAdminRequestV2,
   cancelAdminRequestV2,
   declineAdminRequestV2,
+  deleteAdminRequestV2,
   retryAdminRequestV2,
   loadAdminRequestIntegrationOptionsV2,
   listAdminRequestRoutesV2,
@@ -37,6 +38,7 @@ import {
   getAdminRequestRoutingV2,
   putAdminRequestRoutingV2,
   type AdminRequestQueueFilter,
+  type AdminRequestDeleteOptions,
   type RequestGroupLimit,
   type RequestGroupLimitBody,
   type RequestRoute,
@@ -240,6 +242,28 @@ export function useAdminCancelMediaRequest() {
     onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to cancel request");
+    },
+  });
+}
+
+/**
+ * An admin deletes a request: it leaves the queue (outcome `removed`) and,
+ * unless `siloOnly`, its download is cancelled on the download server.
+ */
+export function useAdminDeleteRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: ({ id, options }: { id: string; options?: AdminRequestDeleteOptions }) =>
+      deleteAdminRequestV2(id, options),
+    onSuccess: () => {
+      toast.success("Request deleted");
+    },
+    // A refused action still refreshes the queue: another admin may have
+    // acted first, and the row should show what happened.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to delete request");
     },
   });
 }

@@ -17,6 +17,7 @@ const adminActionApprove = "approve"
 const adminActionDecline = "decline"
 const adminActionCancel = "cancel"
 const adminActionRetry = "retry"
+const adminActionDelete = "delete"
 const adminRequestSort = "-created_at"
 const opGetAdminRequestCapabilities = "getAdminRequestCapabilities"
 const opAdminApproveRequest = "adminApproveRequest"
@@ -164,7 +165,20 @@ type AdminRequestActionInput struct {
 	MediaRequestGetInput
 	Body struct {
 		Reason string `json:"reason,omitempty"`
+		// Delete only: what to remove on the download server, beyond the
+		// request itself. SiloOnly keeps the request there and only closes
+		// the Silo record.
+		RemoveMedia bool     `json:"remove_media,omitempty" doc:"Delete only: also remove the title from its download server, cancelling the download"`
+		DeleteFiles bool     `json:"delete_files,omitempty" doc:"Delete only: also delete the downloaded files"`
+		SiloOnly    bool     `json:"silo_only,omitempty" doc:"Delete only: close the Silo record without touching the download server"`
+		Qualities   []string `json:"qualities,omitempty" enum:"1080p,2160p" maxItems:"2" doc:"Delete only: the qualities to delete. Omitted: every quality the request holds"`
 	}
+}
+
+// adminRequestDeleter is the admin delete the requests service implements.
+// A service without it answers 503 rather than deleting anything.
+type adminRequestDeleter interface {
+	DeleteRequest(context.Context, mediarequests.Viewer, string, mediarequests.DeleteOptions) (*mediarequests.Request, error)
 }
 type AdminRequestCapabilitiesOutput struct {
 	Status       int
@@ -233,7 +247,7 @@ func registerAdminRequests(reg *Registry) {
 	Register(reg, op(http.MethodGet, "/admin/requests", opListAdminRequests, false), func(ctx context.Context, in *AdminMediaRequestListInput) (*MediaRequestCollectionOutput, error) {
 		return reg.listAdminRequests(ctx, cursors, in)
 	})
-	for _, action := range []string{adminActionApprove, adminActionDecline, adminActionCancel, adminActionRetry} {
+	for _, action := range []string{adminActionApprove, adminActionDecline, adminActionCancel, adminActionRetry, adminActionDelete} {
 		Register(reg, op(http.MethodPost, "/admin/requests/{id}/"+action, "admin"+strings.ToUpper(action[:1])+action[1:]+"Request", false), func(ctx context.Context, in *AdminRequestActionInput) (*MediaRequestOutput, error) {
 			s, p := reg.adminRequestService()
 			if p != nil {
@@ -255,6 +269,17 @@ func registerAdminRequests(reg *Registry) {
 				}
 			case adminActionRetry:
 				r, err = s.Retry(ctx, v, string(in.ID))
+			case adminActionDelete:
+				deleter, ok := s.(adminRequestDeleter)
+				if !ok {
+					return nil, unavailable("request deletion")
+				}
+				r, err = deleter.DeleteRequest(ctx, v, string(in.ID), mediarequests.DeleteOptions{
+					RemoveMedia: in.Body.RemoveMedia,
+					DeleteFiles: in.Body.DeleteFiles,
+					SiloOnly:    in.Body.SiloOnly,
+					Qualities:   requestQualitiesFromStrings(in.Body.Qualities),
+				})
 			}
 			if err != nil {
 				return nil, requestProblem(err)

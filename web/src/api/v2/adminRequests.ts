@@ -9,6 +9,7 @@ import type {
   MediaRequest,
   RequestIntegration,
   RequestMediaType,
+  RequestQuality,
   RequestSettings,
   RequestUserLimit,
 } from "@/api/types";
@@ -413,6 +414,34 @@ export function declineAdminRequestV2(id: string, reason?: string) {
   return v2("POST /api/v2/admin/requests/{id}/decline", { path: { id }, body: { reason } }).then(
     mediaRequestFromV2,
   );
+}
+
+/** What an admin delete removes beyond the request itself. */
+export interface AdminRequestDeleteOptions {
+  /** Also remove the title from its download server, cancelling the download. */
+  removeMedia?: boolean;
+  /** Also delete the downloaded files. */
+  deleteFiles?: boolean;
+  /** Close the Silo record without touching the download server. */
+  siloOnly?: boolean;
+  /** The qualities to delete; omitted deletes every quality the request holds. */
+  qualities?: RequestQuality[];
+}
+
+/**
+ * An admin deletes a request: its Silo record is closed (outcome `removed`) and,
+ * unless `siloOnly`, its download is cancelled on the download server.
+ */
+export function deleteAdminRequestV2(id: string, options: AdminRequestDeleteOptions = {}) {
+  return v2("POST /api/v2/admin/requests/{id}/delete", {
+    path: { id },
+    body: {
+      remove_media: options.removeMedia,
+      delete_files: options.deleteFiles,
+      silo_only: options.siloOnly,
+      qualities: options.qualities,
+    },
+  }).then(mediaRequestFromV2);
 }
 export async function getAdminRequestRouteV2(
   id: string,

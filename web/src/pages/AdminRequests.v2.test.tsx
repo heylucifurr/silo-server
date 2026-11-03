@@ -238,20 +238,28 @@ describe("request administration", () => {
     expect(buttonNames(await rowOf("Waiting Title"))).toEqual([
       "Approve: Waiting Title",
       "Decline: Waiting Title",
+      "Delete request: Waiting Title",
     ]);
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^In progress/ }));
-    expect(buttonNames(await rowOf("Unsent Title"))).toEqual(["Cancel request: Unsent Title"]);
-    expect(buttonNames(await rowOf("Sent Title"))).toEqual([]);
+    expect(buttonNames(await rowOf("Unsent Title"))).toEqual([
+      "Cancel request: Unsent Title",
+      "Delete request: Unsent Title",
+    ]);
+    expect(buttonNames(await rowOf("Sent Title"))).toEqual(["Delete request: Sent Title"]);
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^Failed/ }));
     const broken = await rowOf("Broken Title");
-    // An admin retries a failed request or closes it.
-    expect(buttonNames(broken)).toEqual(["Retry: Broken Title", "Cancel request: Broken Title"]);
+    // An admin retries a failed request, closes it, or deletes it outright.
+    expect(buttonNames(broken)).toEqual([
+      "Retry: Broken Title",
+      "Cancel request: Broken Title",
+      "Delete request: Broken Title",
+    ]);
     expect(within(broken).getByText("no fulfillment backend configured")).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^Done/ }));
-    expect(buttonNames(await rowOf("Finished Title"))).toEqual([]);
+    expect(buttonNames(await rowOf("Finished Title"))).toEqual(["Delete request: Finished Title"]);
   });
 
   it("declines with the reason given and refreshes the counts", async () => {

@@ -4560,6 +4560,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/requests/{id}/delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Manage media requests and their configuration. */
+    post: operations["adminDeleteRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/requests/{id}/decline": {
     parameters: {
       query?: never;
@@ -19149,7 +19166,15 @@ export interface components {
       status: "started";
     };
     AdminRequestActionInputBody: {
+      /** @description Delete only: also delete the downloaded files */
+      delete_files?: boolean;
+      /** @description Delete only: the qualities to delete. Omitted: every quality the request holds */
+      qualities?: ("1080p" | "2160p")[];
       reason?: string;
+      /** @description Delete only: also remove the title from its download server, cancelling the download */
+      remove_media?: boolean;
+      /** @description Delete only: close the Silo record without touching the download server */
+      silo_only?: boolean;
     };
     AdminRequestCapabilitiesOutputBody: {
       /** @description Whether the current principal may use the capability */
@@ -77287,6 +77312,38 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  adminDeleteRequest: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The request */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdminRequestActionInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MediaRequest"];
         };
       };
     };

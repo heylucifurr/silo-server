@@ -1,4 +1,4 @@
-import { Ban, Check, Loader2, RefreshCw, X } from "lucide-react";
+import { Ban, Check, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,18 @@ export interface RequestQueueActionHandlers {
 
 const ACTIONS: Record<
   RequestQueueAction,
-  { label: string; icon: LucideIcon; variant: "default" | "outline" }
+  { label: string; icon: LucideIcon; variant: "default" | "outline"; className?: string }
 > = {
   approve: { label: "Approve", icon: Check, variant: "default" },
   decline: { label: "Decline", icon: X, variant: "outline" },
   retry: { label: "Retry", icon: RefreshCw, variant: "default" },
   cancel: { label: "Cancel request", icon: Ban, variant: "outline" },
+  delete: {
+    label: "Delete request",
+    icon: Trash2,
+    variant: "outline",
+    className: "text-destructive hover:text-destructive",
+  },
 };
 
 /** The actions a request allows in the queue; none for one that is done. */
@@ -38,13 +44,14 @@ export function RequestActionButtons({
   return (
     <div className="flex flex-wrap gap-2">
       {actions.map((action) => {
-        const { label, icon: Icon, variant } = ACTIONS[action];
+        const { label, icon: Icon, variant, className } = ACTIONS[action];
         const isRunning = action === running;
         return (
           <Button
             key={action}
             size="sm"
             variant={variant}
+            className={className}
             disabled={disabled}
             aria-label={`${label}: ${request.title}`}
             aria-busy={isRunning || undefined}

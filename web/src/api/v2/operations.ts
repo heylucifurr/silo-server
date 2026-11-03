@@ -717,6 +717,7 @@ export const v2Operations = {
   "POST /api/v2/admin/requests/{id}/approve": "adminApproveRequest",
   "POST /api/v2/admin/requests/{id}/cancel": "adminCancelRequest",
   "POST /api/v2/admin/requests/{id}/decline": "adminDeclineRequest",
+  "POST /api/v2/admin/requests/{id}/delete": "adminDeleteRequest",
   "POST /api/v2/admin/requests/{id}/retry": "adminRetryRequest",
   "POST /api/v2/admin/sections": "createAdminSection",
   "POST /api/v2/admin/sections/bulk": "bulkCreateAdminSections",

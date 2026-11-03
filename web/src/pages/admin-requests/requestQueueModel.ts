@@ -38,6 +38,7 @@ export function requestQueueView(
       return "failed";
     case "declined":
     case "cancelled":
+    case "removed":
       return "done";
   }
   if (request.status === "pending") return "needs_approval";
@@ -45,12 +46,15 @@ export function requestQueueView(
   return "in_progress";
 }
 
-export type RequestQueueAction = "approve" | "decline" | "retry" | "cancel";
+export type RequestQueueAction = "approve" | "decline" | "retry" | "cancel" | "delete";
 
 /**
  * What an admin can do with a request, by its view and the server's rules:
  * approve or decline what needs approval; cancel what is in progress while
- * nothing has been sent for it; retry or close (cancel) what failed.
+ * nothing has been sent for it; retry or close (cancel) what failed. Delete is
+ * offered everywhere: it closes the Silo record and removes the request from
+ * its download server, which is how an admin cleans up a request they no longer
+ * want, including one that is already done.
  */
 export function requestQueueActions(
   request: Pick<MediaRequest, "status" | "outcome" | "targets">,
@@ -58,13 +62,13 @@ export function requestQueueActions(
   const withdrawable = canWithdrawRequest(request);
   switch (requestQueueView(request)) {
     case "needs_approval":
-      return withdrawable ? ["approve", "decline"] : [];
+      return withdrawable ? ["approve", "decline", "delete"] : ["delete"];
     case "in_progress":
-      return withdrawable ? ["cancel"] : [];
+      return withdrawable ? ["cancel", "delete"] : ["delete"];
     case "failed":
-      return ["retry", "cancel"];
+      return ["retry", "cancel", "delete"];
     case "done":
-      return [];
+      return ["delete"];
   }
 }
 
@@ -81,6 +85,9 @@ const EVENT_LABELS: Record<string, string> = {
   outcome_declined: "Declined",
   outcome_cancelled: "Cancelled",
   outcome_failed: "Failed",
+  outcome_removed: "Removed",
+  // The reconcile pass retires a request Seerr no longer has.
+  removed_in_seerr: "Removed in the download server",
   retried: "Retried",
   submit_deferred: "Couldn't send yet",
 };

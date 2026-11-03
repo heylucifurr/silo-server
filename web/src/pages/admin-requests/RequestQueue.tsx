@@ -15,6 +15,7 @@ import { useAdminUsers } from "@/hooks/queries/admin/users";
 import {
   type BulkRequestProgress,
   useAdminCancelMediaRequest,
+  useAdminDeleteRequest,
   useAdminRequestCounts,
   useAdminRequestQueue,
   useApproveMediaRequest,
@@ -29,6 +30,7 @@ import { formatDateTime } from "@/lib/datetime";
 import { formatMediaType, formatSeasonList, requestDetailHref } from "@/lib/mediaRequests";
 import { cn } from "@/lib/utils";
 import { RequestActionButtons, type RequestQueueActionHandlers } from "./RequestActionButtons";
+import { DeleteRequestDialog } from "./DeleteRequestDialog";
 import { RequestQueueDialog } from "./RequestQueueDialog";
 import {
   EmptyPanel,
@@ -120,11 +122,13 @@ export function RequestQueue() {
     : null;
   if (opened !== null && openRequest === null) setOpened(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
+  const [deletePrompt, setDeletePrompt] = useState<MediaRequest | null>(null);
   const [busy, setBusy] = useState<ReadonlyMap<string, RequestQueueAction>>(() => new Map());
   const approve = useApproveMediaRequest();
   const decline = useDeclineMediaRequest();
   const retry = useRetryMediaRequest();
   const cancel = useAdminCancelMediaRequest();
+  const remove = useAdminDeleteRequest();
   const bulk = useBulkRequestAction();
 
   function updateParams(change: (params: URLSearchParams) => void) {
@@ -140,21 +144,23 @@ export function RequestQueue() {
     send: () => Promise<MediaRequest>,
   ) {
     setBusy((current) => new Map(current).set(request.id, action));
-    send()
-      .then((updated) => {
-        // The dialog follows the request, which may have left this view.
-        setOpened((open) => (open?.id === updated.id ? { id: open.id, acted: updated } : open));
-      })
-      // The mutation already said what went wrong. Whatever the dialog knew
-      // is now suspect: it shows the refetched row, or closes.
-      .catch(() => setOpened((open) => (open?.id === request.id ? { id: open.id } : open)))
-      .finally(() =>
-        setBusy((current) => {
-          const next = new Map(current);
-          next.delete(request.id);
-          return next;
-        }),
-      );
+    return (
+      send()
+        .then((updated) => {
+          // The dialog follows the request, which may have left this view.
+          setOpened((open) => (open?.id === updated.id ? { id: open.id, acted: updated } : open));
+        })
+        // The mutation already said what went wrong. Whatever the dialog knew
+        // is now suspect: it shows the refetched row, or closes.
+        .catch(() => setOpened((open) => (open?.id === request.id ? { id: open.id } : open)))
+        .finally(() =>
+          setBusy((current) => {
+            const next = new Map(current);
+            next.delete(request.id);
+            return next;
+          }),
+        )
+    );
   }
 
   const handlers: RequestQueueActionHandlers = {
@@ -169,6 +175,8 @@ export function RequestQueue() {
         case "decline":
         case "cancel":
           return setPrompt({ action, request });
+        case "delete":
+          return setDeletePrompt(request);
       }
     },
   };
@@ -309,6 +317,23 @@ export function RequestQueue() {
         onConfirm={confirmPrompt}
         onOpenChange={(open) => {
           if (!open) setPrompt(null);
+        }}
+      />
+      <DeleteRequestDialog
+        request={deletePrompt}
+        open={deletePrompt !== null}
+        isPending={deletePrompt !== null && busy.get(deletePrompt.id) === "delete"}
+        onOpenChange={(open) => {
+          if (!open) setDeletePrompt(null);
+        }}
+        onConfirm={(options) => {
+          const request = deletePrompt;
+          if (!request) return;
+          void track(request, "delete", () =>
+            remove.mutateAsync({ id: request.id, options }),
+          ).finally(() =>
+            setDeletePrompt((current) => (current?.id === request.id ? null : current)),
+          );
         }}
       />
     </div>

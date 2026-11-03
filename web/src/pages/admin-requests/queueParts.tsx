@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { requestDisplayState, tmdbImageURL } from "@/lib/mediaRequests";
+import { formatRequestedQualities, requestDisplayState, tmdbImageURL } from "@/lib/mediaRequests";
 import { cn } from "@/lib/utils";
 import { formatTargetStatus, requestProblemText } from "./requestQueueModel";
 
@@ -78,9 +78,11 @@ export function RequestPoster({
 export function RequestStateSummary({ request }: { request: MediaRequest }) {
   const state = requestDisplayState(request.status, request.outcome, request.state);
   const problem = requestProblemText(request);
+  const qualities = formatRequestedQualities(request.requested_qualities);
   return (
     <div className="flex min-w-0 flex-col items-start gap-1">
       {state ? <RequestStatusBadge state={state} /> : null}
+      {qualities ? <p className="text-muted-foreground text-xs">Requested in {qualities}</p> : null}
       {problem ? (
         <p
           className={cn(

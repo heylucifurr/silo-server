@@ -23,6 +23,7 @@ describe("requestQueueView", () => {
     ["failed", { status: "approved", outcome: "failed" }, "failed"],
     ["declined while pending", { status: "pending", outcome: "declined" }, "done"],
     ["cancelled", { status: "approved", outcome: "cancelled" }, "done"],
+    ["removed", { status: "approved", outcome: "removed" }, "done"],
   ])("puts a %s request where the server does", (_label, request, view) => {
     expect(requestQueueView(request)).toBe(view);
   });
@@ -30,14 +31,21 @@ describe("requestQueueView", () => {
 
 describe("requestQueueActions", () => {
   it.each<[string, Fields, string[]]>([
-    ["pending", { status: "pending", outcome: "active" }, ["approve", "decline"]],
-    ["approved, nothing sent", { status: "approved", outcome: "active", targets: [] }, ["cancel"]],
-    ["approved and sent", { status: "approved", outcome: "active", targets: sent }, []],
-    ["queued", { status: "queued", outcome: "active", targets: sent }, []],
+    ["pending", { status: "pending", outcome: "active" }, ["approve", "decline", "delete"]],
+    [
+      "approved, nothing sent",
+      { status: "approved", outcome: "active", targets: [] },
+      ["cancel", "delete"],
+    ],
+    // Nothing left to send for it, but an admin can still delete it: the
+    // delete closes the Silo record and removes the request from its server.
+    ["approved and sent", { status: "approved", outcome: "active", targets: sent }, ["delete"]],
+    ["queued", { status: "queued", outcome: "active", targets: sent }, ["delete"]],
     // Admin cancel accepts only an active request, so a failed one offers Retry alone.
-    ["failed", { status: "approved", outcome: "failed", targets: [] }, ["retry", "cancel"]],
-    ["completed", { status: "completed", outcome: "active" }, []],
-    ["declined", { status: "pending", outcome: "declined" }, []],
+    ["failed", { status: "approved", outcome: "failed", targets: [] }, ["retry", "cancel", "delete"]],
+    ["completed", { status: "completed", outcome: "active" }, ["delete"]],
+    ["declined", { status: "pending", outcome: "declined" }, ["delete"]],
+    ["removed", { status: "approved", outcome: "removed" }, ["delete"]],
   ])("offers a %s request only what the server allows", (_label, request, actions) => {
     expect(requestQueueActions(request)).toEqual(actions);
   });
