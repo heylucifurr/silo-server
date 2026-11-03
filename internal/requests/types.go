@@ -277,6 +277,12 @@ type FeatureStatus struct {
 	// profile settings are on. The caller adds the account's permission
 	// (v2 only).
 	WatchlistRequests bool `json:"-"`
+	// CanRequest4K reports that the viewer may ask for 4K: only an admin
+	// account may (v2 only).
+	CanRequest4K bool `json:"-"`
+	// Request4KAvailable reports that an enabled request connection takes 4K
+	// requests, so offering the choice is meaningful (v2 only).
+	Request4KAvailable bool `json:"-"`
 }
 
 type UserLimit struct {
@@ -489,6 +495,10 @@ type RequestState struct {
 	RequestedByViewer bool `json:"-"`
 	// State is the active request's user-facing state (v2 only).
 	State State `json:"-"`
+	// RequestedQualities are the qualities the active request asks for (v2
+	// only); a client uses them to offer only the qualities not already asked
+	// for.
+	RequestedQualities []Quality `json:"-"`
 	// Download is the active request's download progress. Only the title
 	// detail fills it; search and discovery do not load targets (v2 only).
 	Download *DownloadProgress `json:"-"`

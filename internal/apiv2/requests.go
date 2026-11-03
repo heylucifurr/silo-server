@@ -33,6 +33,9 @@ type RequestMediaState struct {
 	// Download is filled on the title detail and the watchlist titles only:
 	// search and discovery do not load each result's targets.
 	Download *RequestDownload `json:"download,omitempty" doc:"How far the active request's downloads are, while its download server reports them. Only the title detail (getRequestMediaDetail) and the watchlist titles (listWatchlistTitles) carry it"`
+	// RequestedQualities are the qualities the active request asks for; a
+	// client uses them to offer only the qualities not already asked for.
+	RequestedQualities []string `json:"requested_qualities,omitempty" doc:"The qualities the active request asks for: 1080p, 2160p, or both"`
 }
 
 // RequestDownload is how far downloads are, as the download server last
@@ -231,6 +234,7 @@ type MediaRequest struct {
 	RequestedByProfileID ID                      `json:"requested_by_profile_id,omitempty" example:"p-owner"`
 	IntegrationKind      string                  `json:"integration_kind,omitempty" doc:"Admins only: the download server's kind" example:"radarr"`
 	IsAnime              bool                    `json:"is_anime"`
+	RequestedQualities   []string                `json:"requested_qualities" doc:"The qualities the request asks for: 1080p, 2160p, or both. Empty, never null"`
 	Targets              []RequestTarget         `json:"targets" doc:"Empty, never null"`
 	ExternalID           string                  `json:"external_id,omitempty" doc:"Admins only: the integration's own identifier"`
 	ExternalStatus       string                  `json:"external_status,omitempty" doc:"Admins only: the status as the download server reports it"`
@@ -266,6 +270,10 @@ type MediaRequestCreate struct {
 	PosterPath   string `json:"poster_path,omitempty" doc:"TMDB image path"`
 	BackdropPath string `json:"backdrop_path,omitempty" doc:"TMDB image path"`
 	Seasons      []int  `json:"seasons,omitempty" maxItems:"200" doc:"Series only: the season numbers to request, starting at 1 (a season below 1 is refused). Omitted: every aired season not yet complete in the library" example:"[2,3]"`
+	// Qualities is the per-request quality choice. Only an admin account may
+	// ask for 2160p; a non-admin that sends it is refused. Omitted: HD, plus
+	// 4K when the server-wide force-dual switch is on for an admin.
+	Qualities []string `json:"qualities,omitempty" enum:"1080p,2160p" maxItems:"2" doc:"The qualities to request: 1080p, 2160p, or both. Admins only for 2160p" example:"[1080p,2160p]"`
 }
 
 // MediaRequestCreateInput is the createRequest request.
@@ -523,6 +531,7 @@ func (reg *Registry) createRequest(ctx context.Context, in *MediaRequestCreateIn
 		PosterPath:   in.Body.PosterPath,
 		BackdropPath: in.Body.BackdropPath,
 		Seasons:      in.Body.Seasons,
+		Qualities:    requestQualitiesFromStrings(in.Body.Qualities),
 	})
 	if err != nil {
 		return nil, requestProblem(err)
@@ -819,6 +828,32 @@ func requestSourceOf(s mediarequests.Source) mediarequests.Source {
 	return s
 }
 
+// requestQualitiesFromStrings maps a create body's qualities to the service's
+// type. An unknown value is passed through so the service refuses it.
+func requestQualitiesFromStrings(in []string) []mediarequests.Quality {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]mediarequests.Quality, 0, len(in))
+	for _, q := range in {
+		out = append(out, mediarequests.Quality(q))
+	}
+	return out
+}
+
+// requestQualitiesOf maps a request's qualities for the wire, defaulting an
+// empty set (a row older than the column) to HD.
+func requestQualitiesOf(in []mediarequests.Quality) []string {
+	if len(in) == 0 {
+		return []string{string(mediarequests.Quality1080p)}
+	}
+	out := make([]string, 0, len(in))
+	for _, q := range in {
+		out = append(out, string(q))
+	}
+	return out
+}
+
 // mediaRequestOf maps a request for the viewer. The download server details
 // (which server and routing rule took each target, the server's own ids and
 // raw statuses, and the submission and target errors, which can name servers
@@ -826,32 +861,33 @@ func requestSourceOf(s mediarequests.Source) mediarequests.Source {
 // quality, status and download progress.
 func mediaRequestOf(r *mediarequests.Request, viewer mediarequests.Viewer) MediaRequest {
 	out := MediaRequest{
-		ID:               ID(r.ID),
-		Provider:         r.Provider,
-		MediaType:        string(r.MediaType),
-		TMDBID:           r.TMDBID,
-		TVDBID:           r.TVDBID,
-		IMDbID:           r.IMDbID,
-		Title:            r.Title,
-		Year:             r.Year,
-		Overview:         r.Overview,
-		PosterPath:       r.PosterPath,
-		BackdropPath:     r.BackdropPath,
-		Status:           string(r.Status),
-		Outcome:          string(r.Outcome),
-		State:            string(r.State()),
-		Seasons:          NonNil(r.Seasons),
-		SeasonProgress:   requestSeasonProgressOf(r.SeasonProgress),
-		OutcomeReason:    r.OutcomeReason,
-		Source:           string(requestSourceOf(r.Source)),
-		IsAnime:          r.IsAnime,
-		Targets:          make([]RequestTarget, 0, len(r.Targets)),
-		LibraryContentID: r.LibraryContentID,
-		CreatedAt:        NewInstant(r.CreatedAt),
-		UpdatedAt:        NewInstant(r.UpdatedAt),
-		ApprovedAt:       instantPtr(r.ApprovedAt),
-		CompletedAt:      instantPtr(r.CompletedAt),
-		Download:         requestDownloadOf(r.Download()),
+		ID:                 ID(r.ID),
+		Provider:           r.Provider,
+		MediaType:          string(r.MediaType),
+		TMDBID:             r.TMDBID,
+		TVDBID:             r.TVDBID,
+		IMDbID:             r.IMDbID,
+		Title:              r.Title,
+		Year:               r.Year,
+		Overview:           r.Overview,
+		PosterPath:         r.PosterPath,
+		BackdropPath:       r.BackdropPath,
+		Status:             string(r.Status),
+		Outcome:            string(r.Outcome),
+		State:              string(r.State()),
+		Seasons:            NonNil(r.Seasons),
+		SeasonProgress:     requestSeasonProgressOf(r.SeasonProgress),
+		OutcomeReason:      r.OutcomeReason,
+		Source:             string(requestSourceOf(r.Source)),
+		IsAnime:            r.IsAnime,
+		RequestedQualities: requestQualitiesOf(r.RequestedQualities),
+		Targets:            make([]RequestTarget, 0, len(r.Targets)),
+		LibraryContentID:   r.LibraryContentID,
+		CreatedAt:          NewInstant(r.CreatedAt),
+		UpdatedAt:          NewInstant(r.UpdatedAt),
+		ApprovedAt:         instantPtr(r.ApprovedAt),
+		CompletedAt:        instantPtr(r.CompletedAt),
+		Download:           requestDownloadOf(r.Download()),
 	}
 	if viewer.IsAdmin {
 		out.IntegrationKind, out.ExternalID, out.ExternalStatus, out.LastError = r.IntegrationKind, r.ExternalID, r.ExternalStatus, r.LastError
@@ -912,7 +948,7 @@ func requestSeasonProgressOf(progress []mediarequests.SeasonProgress) []RequestS
 }
 
 func requestMediaStateOf(s mediarequests.RequestState) RequestMediaState {
-	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID), Following: s.Following, RequestedByViewer: s.RequestedByViewer, State: string(s.State), Download: requestDownloadOf(s.Download)}
+	return RequestMediaState{Status: string(s.Status), Requestable: s.Requestable, Reason: s.Reason, RequestID: ID(s.RequestID), Following: s.Following, RequestedByViewer: s.RequestedByViewer, State: string(s.State), RequestedQualities: requestQualitiesOf(s.RequestedQualities), Download: requestDownloadOf(s.Download)}
 }
 
 func requestMediaResultsOf(results []mediarequests.MediaResult) []RequestMediaResult {

@@ -9,6 +9,7 @@ import RequestActionBar from "./RequestActionBar";
 
 const mocks = vi.hoisted(() => ({
   featureStatus: vi.fn(),
+  createRequest: vi.fn(),
   addWatchlistTitle: vi.fn(),
   deleteWatchlistTitle: vi.fn(),
   toastSuccess: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("@/hooks/queries/useRequests", async () => {
   return {
     ...actual,
     useRequestFeatureStatus: () => mocks.featureStatus(),
-    useCreateMediaRequest: () => idle,
+    useCreateMediaRequest: () => mocks.createRequest(),
     useCancelMediaRequest: () => idle,
     useToggleRequestFollow: () => idle,
     useMediaRequest: () => ({ data: undefined }),
@@ -68,6 +69,7 @@ const NOTE = /Adding it to your watchlist also requests it/;
 
 describe("RequestActionBar watchlist toggle", () => {
   beforeEach(() => {
+    mocks.createRequest.mockReturnValue({ mutate: vi.fn(), isPending: false });
     mocks.featureStatus.mockReturnValue({
       data: {
         requests_enabled: true,
@@ -167,3 +169,78 @@ describe("RequestActionBar watchlist toggle", () => {
     ).toBe(true);
   });
 });
+
+describe("RequestActionBar 4K choice", () => {
+  const with4K = (overrides: Record<string, unknown> = {}) => {
+    mocks.featureStatus.mockReturnValue({
+      data: {
+        requests_enabled: true,
+        allowed: true,
+        can_request_4k: true,
+        request_4k_available: true,
+        ...overrides,
+      },
+    });
+  };
+
+  beforeEach(() => {
+    mocks.createRequest.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("requests HD from the main segment and both qualities from the 4K segment", () => {
+    const mutate = vi.fn();
+    mocks.createRequest.mockReturnValue({ mutate, isPending: false });
+    with4K();
+    renderBar(heat);
+
+    fireEvent.click(screen.getByRole("button", { name: "Request movie" }));
+    expect(mutate.mock.calls[0][0]).not.toHaveProperty("qualities");
+
+    fireEvent.click(screen.getByRole("button", { name: "Request 4K" }));
+    expect(mutate.mock.lastCall?.[0]).toMatchObject({ qualities: ["1080p", "2160p"] });
+  });
+
+  it("adds only 4K when the title is already requested in HD", () => {
+    const mutate = vi.fn();
+    mocks.createRequest.mockReturnValue({ mutate, isPending: false });
+    with4K();
+    renderBar({
+      ...heat,
+      request: { requestable: false, status: "pending", requested_qualities: ["1080p"] },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Request 4K" }));
+    expect(mutate.mock.lastCall?.[0]).toMatchObject({ qualities: ["2160p"] });
+  });
+
+  it("offers no 4K segment to a non-admin", () => {
+    with4K({ can_request_4k: false });
+    renderBar(heat);
+    expect(screen.getByRole("button", { name: "Request movie" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
+  });
+
+  it("offers no 4K segment when no connected server takes 4K", () => {
+    with4K({ request_4k_available: false });
+    renderBar(heat);
+    expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
+  });
+
+  it("hides the 4K segment once the request already includes 4K", () => {
+    with4K();
+    renderBar({
+      ...heat,
+      request: {
+        requestable: false,
+        status: "approved",
+        requested_qualities: ["1080p", "2160p"],
+      },
+    });
+    expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
+  });
+});
+

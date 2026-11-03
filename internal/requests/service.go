@@ -1321,16 +1321,38 @@ func (s *Service) GetFeatureStatus(ctx context.Context, viewer Viewer) (FeatureS
 	status := FeatureStatus{
 		RequestsEnabled:            settings.RequestsEnabled,
 		RatingRestrictionsEnforced: hasRatings && hasCerts,
+		CanRequest4K:               viewer.IsAdmin,
 	}
 	if settings.RequestsEnabled {
 		if status.MissingSeasonsRequestable, err = s.moreSeasonsRequestable(ctx); err != nil {
 			return FeatureStatus{}, err
 		}
+		status.Request4KAvailable = s.request4KAvailable(ctx)
 		// The account's own permission is left to the caller, which reads
 		// it for the request capability anyway.
 		status.WatchlistRequests = settings.WatchlistRequests && viewer.UserID != 0 && s.watchlistAutoRequest(ctx, viewer)
 	}
 	return status, nil
+}
+
+// request4KAvailable reports whether any enabled request connection takes 4K
+// requests, so a client can offer the 4K choice.
+func (s *Service) request4KAvailable(ctx context.Context) bool {
+	integrations, err := s.store.ListIntegrations(ctx)
+	if err != nil {
+		return false
+	}
+	for _, in := range integrations {
+		if !in.Enabled {
+			continue
+		}
+		if boolConfig(in.PluginConfig, configSupports4K) ||
+			boolConfig(in.PluginConfig, configIsDefault4K) ||
+			boolConfig(in.PluginConfig, configIs4K) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) ensureRequestsEnabled(ctx context.Context) error {
@@ -3214,6 +3236,7 @@ func activeRequestState(viewer Viewer, req *Request) RequestState {
 	}
 	state.State = req.State()
 	state.RequestedByViewer = req.requestedBy(viewer)
+	state.RequestedQualities = req.RequestedQualities
 	return state
 }
 

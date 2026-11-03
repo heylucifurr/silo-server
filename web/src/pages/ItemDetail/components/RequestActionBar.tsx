@@ -7,13 +7,14 @@ import {
   BookmarkCheck,
   CircleCheck,
   Clock,
+  Download,
   Hourglass,
   Library,
   type LucideIcon,
   Plus,
   X,
 } from "lucide-react";
-import type { MediaRequest, RequestMediaDetail } from "@/api/types";
+import type { MediaRequest, RequestMediaDetail, RequestQuality } from "@/api/types";
 import { CancelRequestDialog } from "@/components/CancelRequestDialog";
 import { RequestDownloadProgress } from "@/components/RequestDownloadProgress";
 import { RequestSeasonsDialog } from "@/components/RequestSeasonsDialog";
@@ -33,6 +34,7 @@ import {
   canCancelOwnRequest,
   formatRequestDisplayState,
   formatRequestReason,
+  request4KCapability,
   requestDisplayState,
   requestInputFromMediaResult,
   type RequestDisplayState,
@@ -53,6 +55,7 @@ const STATE_ICONS: Record<RequestDisplayState, LucideIcon> = {
   declined: Ban,
   cancelled: Ban,
   failed: Ban,
+  removed: Ban,
 };
 
 interface RequestActionBarProps {
@@ -97,6 +100,31 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
     item.request.reason === "already_requested" &&
     !item.request.requested_by_viewer;
 
+  // Admins may add a 4K copy, but only when a connected server takes 4K
+  // requests. A series with a season picker chooses its quality in the dialog.
+  const fourK = request4KCapability(featureStatus.data);
+  const requestedQualities = item.request.requested_qualities ?? [];
+  const fourKTrailing =
+    fourK.canRequest4K && fourK.available && !inLibrary && !seasonPicker &&
+    !requestedQualities.includes("2160p")
+      ? {
+          label: "4K",
+          icon: Download,
+          ariaLabel: "Request 4K",
+          pending: createRequest.isPending,
+          // Add 4K next to an HD copy, or on its own when HD is already asked for.
+          onClick: () =>
+            createRequest.mutate(
+              requestInputFromMediaResult(
+                item,
+                requestedQualities.includes("1080p")
+                  ? (["2160p"] as RequestQuality[])
+                  : (["1080p", "2160p"] as RequestQuality[]),
+              ),
+            ),
+        }
+      : undefined;
+
   let primaryAction: ActionBarPrimaryAction;
   if (item.request.requestable) {
     primaryAction = {
@@ -106,6 +134,7 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
       onClick: seasonPicker
         ? () => setPickSeasons(true)
         : () => createRequest.mutate(requestInputFromMediaResult(item)),
+      trailing: seasonPicker ? undefined : fourKTrailing,
     };
   } else if (inLibrary) {
     primaryAction = libraryHref
@@ -117,6 +146,8 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
       label: state === "pending" ? "Requested" : formatRequestDisplayState(state),
       icon: STATE_ICONS[state],
       disabled: true,
+      // An admin can still add the missing 4K copy to an open request.
+      trailing: fourKTrailing,
     };
   } else {
     primaryAction = { label: formatRequestReason(item.request.reason), icon: Ban, disabled: true };

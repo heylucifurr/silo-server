@@ -22,6 +22,7 @@ const STATE_STYLES: Record<RequestDisplayState, { variant: BadgeVariant; classNa
   declined: { variant: "outline", className: "text-muted-foreground" },
   cancelled: { variant: "outline", className: "text-muted-foreground" },
   failed: { variant: "destructive" },
+  removed: { variant: "outline", className: "text-muted-foreground" },
 };
 
 // An outline badge is transparent, so over artwork it needs its own backing.

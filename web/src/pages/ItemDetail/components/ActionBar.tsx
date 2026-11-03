@@ -152,6 +152,9 @@ function DetailOverflowMenuItem({
 
 /** Drawn like the Play pill in each of its states: enabled, disabled, or in flight. */
 function PrimaryActionButton({ action }: { action: ActionBarPrimaryAction }) {
+  if (action.trailing) {
+    return <SplitPrimaryAction action={action} trailing={action.trailing} />;
+  }
   const inert = Boolean(action.disabled || action.pending);
   const variant = action.variant ?? "default";
   const Icon = action.pending ? Loader2 : action.icon;
@@ -178,6 +181,65 @@ function PrimaryActionButton({ action }: { action: ActionBarPrimaryAction }) {
   );
 }
 
+/**
+ * A primary pill with a second action attached to its right edge: the request
+ * button's 1080p default plus a 4K segment. The two share one rounded shape,
+ * and the segment carries its own pending and disabled state so only the part
+ * that is in flight spins.
+ */
+function SplitPrimaryAction({
+  action,
+  trailing,
+}: {
+  action: ActionBarPrimaryAction;
+  trailing: ActionBarTrailingAction;
+}) {
+  const primaryInert = Boolean(action.disabled || action.pending);
+  const trailingInert = Boolean(trailing.disabled || trailing.pending);
+  const variant = action.variant ?? "default";
+  const PrimaryIcon = action.pending ? Loader2 : action.icon;
+  const TrailingIcon = trailing.pending ? Loader2 : trailing.icon;
+  const interactiveClass = primaryInert
+    ? ""
+    : `${variant === "default" ? responsivePlayActionClass : responsivePrimaryActionClass} cursor-pointer`;
+
+  return (
+    <div className="inline-flex h-11 items-stretch overflow-hidden rounded-full shadow-md">
+      <Button
+        variant={variant}
+        onClick={action.onClick}
+        disabled={primaryInert}
+        aria-busy={action.pending || undefined}
+        className={`${interactiveClass} h-11 gap-2.5 rounded-none text-[0.9375rem] font-bold tracking-wide has-[>svg]:px-6`}
+      >
+        {PrimaryIcon && (
+          <PrimaryIcon
+            aria-hidden="true"
+            className={`size-[18px] ${action.pending ? "animate-spin" : ""}`}
+          />
+        )}
+        {action.label}
+      </Button>
+      <button
+        type="button"
+        onClick={trailing.onClick}
+        disabled={trailingInert}
+        aria-busy={trailing.pending || undefined}
+        aria-label={trailing.ariaLabel ?? trailing.label}
+        className={`inline-flex h-11 items-center gap-2 rounded-none bg-black px-4 text-[0.9375rem] font-bold tracking-wide text-white transition-colors enabled:cursor-pointer enabled:hover:bg-black/85 disabled:opacity-60 ${trailing.className ?? ""}`}
+      >
+        {TrailingIcon && (
+          <TrailingIcon
+            aria-hidden="true"
+            className={`size-[18px] ${trailing.pending ? "animate-spin" : ""}`}
+          />
+        )}
+        {trailing.label}
+      </button>
+    </div>
+  );
+}
+
 /** The Watch Together group in the overflow menu. */
 export interface ActionBarWatchTogether {
   onStartParty: () => void;
@@ -199,6 +261,25 @@ export interface ActionBarPrimaryAction {
   disabled?: boolean;
   /** Defaults to the Play pill's styling. */
   variant?: "default" | "glass";
+  /**
+   * A second segment drawn attached to the primary pill's right edge, making a
+   * split button (e.g. "Request movie" | "4K"). It carries its own action and
+   * its own pending/disabled state.
+   */
+  trailing?: ActionBarTrailingAction;
+}
+
+/** The attached right segment of a split primary button. */
+export interface ActionBarTrailingAction {
+  label: string;
+  icon?: LucideIcon;
+  onClick?: () => void;
+  pending?: boolean;
+  disabled?: boolean;
+  /** Names the segment for a screen reader when its text is short (e.g. "4K"). */
+  ariaLabel?: string;
+  /** Overrides the trailing segment's color classes. */
+  className?: string;
 }
 
 /** A labelled glass pill after the primary action. */

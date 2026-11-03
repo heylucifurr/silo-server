@@ -5,6 +5,7 @@ import type {
   MediaRequestStatus,
   RequestMediaResult,
   RequestMediaSeason,
+  RequestQuality,
   RequestSeasonProgress,
   RequestMediaType,
   RequestSearchMediaType,
@@ -33,6 +34,28 @@ export function formatRequestStatus(status?: MediaRequestStatus): string {
   }
 }
 
+/**
+ * The viewer's 4K request capability, read from the v2 status response. The
+ * fields are read defensively: the generated contract (web/src/api/v2/schema.ts)
+ * gains them when `make apiv2-web-types` next runs.
+ */
+export function request4KCapability(status: unknown): {
+  canRequest4K: boolean;
+  available: boolean;
+} {
+  const s = status as { can_request_4k?: unknown; request_4k_available?: unknown } | undefined;
+  return {
+    canRequest4K: s?.can_request_4k === true,
+    available: s?.request_4k_available === true,
+  };
+}
+
+/** "1080p", "4K", or "1080p + 4K"; "" when the request has no qualities. */
+export function formatRequestedQualities(qualities?: readonly RequestQuality[]): string {
+  if (!qualities || qualities.length === 0) return "";
+  return qualities.map((quality) => (quality === "2160p" ? "4K" : "1080p")).join(" + ");
+}
+
 export function formatRequestOutcome(outcome?: MediaRequestOutcome): string {
   switch (outcome) {
     case "active":
@@ -43,6 +66,8 @@ export function formatRequestOutcome(outcome?: MediaRequestOutcome): string {
       return "Cancelled";
     case "failed":
       return "Failed";
+    case "removed":
+      return "Removed";
     default:
       return "Active";
   }
@@ -63,7 +88,13 @@ export function requestDisplayState(
   state?: RequestUserState,
 ): RequestDisplayState | undefined {
   if (state) return state;
-  if (outcome === "declined" || outcome === "cancelled" || outcome === "failed") return outcome;
+  if (
+    outcome === "declined" ||
+    outcome === "cancelled" ||
+    outcome === "failed" ||
+    outcome === "removed"
+  )
+    return outcome;
   switch (status) {
     case "pending":
     case "approved":
@@ -345,7 +376,10 @@ export function tmdbImageURL(path?: string, size = "w342"): string | null {
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
-export function requestInputFromMediaResult(item: RequestMediaResult): CreateMediaRequestInput {
+export function requestInputFromMediaResult(
+  item: RequestMediaResult,
+  qualities?: RequestQuality[],
+): CreateMediaRequestInput {
   return {
     media_type: item.media_type,
     tmdb_id: item.tmdb_id,
@@ -354,5 +388,6 @@ export function requestInputFromMediaResult(item: RequestMediaResult): CreateMed
     overview: item.overview || undefined,
     poster_path: item.poster_path || undefined,
     backdrop_path: item.backdrop_path || undefined,
+    ...(qualities && qualities.length > 0 ? { qualities } : {}),
   };
 }

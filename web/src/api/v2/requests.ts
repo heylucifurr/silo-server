@@ -83,7 +83,11 @@ export async function listMyMediaRequestsV2(
       ? Math.min(100, Math.floor(params.limit))
       : 50;
   const status = params.status && params.status !== "all" ? params.status : undefined;
-  const outcome = params.outcome && params.outcome !== "all" ? params.outcome : undefined;
+  // The viewer's own list offers no removed filter; the admin queue has one.
+  const outcome =
+    params.outcome && params.outcome !== "all" && params.outcome !== "removed"
+      ? params.outcome
+      : undefined;
   const out: MediaRequest[] = [];
   let cursor: string | undefined;
   while (out.length < wanted) {

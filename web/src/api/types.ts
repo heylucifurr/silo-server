@@ -1851,8 +1851,10 @@ export interface UserCollectionSyncResult {
 export type RequestMediaType = "movie" | "series";
 export type RequestSearchMediaType = RequestMediaType | "all";
 export type MediaRequestStatus = "pending" | "approved" | "queued" | "downloading" | "completed";
-export type MediaRequestOutcome = "active" | "declined" | "cancelled" | "failed";
+export type MediaRequestOutcome = "active" | "declined" | "cancelled" | "failed" | "removed";
 export type RequestAvailability = "missing" | "available";
+/** A request's quality: HD (1080p) or UHD (2160p). */
+export type RequestQuality = "1080p" | "2160p";
 /** The one request state the server derives for users (v2 `state`). */
 export type RequestUserState =
   | "pending"
@@ -1862,7 +1864,8 @@ export type RequestUserState =
   | "available"
   | "declined"
   | "cancelled"
-  | "failed";
+  | "failed"
+  | "removed";
 export type RequestLimitMode = "inherit" | "custom" | "unlimited" | "blocked";
 export type RequestApprovalMode = "inherit" | "manual" | "auto" | "blocked";
 
@@ -1877,6 +1880,8 @@ export interface RequestState {
   requested_by_viewer?: boolean;
   /** User-facing state of the active request. */
   state?: RequestUserState;
+  /** The qualities the active request asks for; absent from older servers. */
+  requested_qualities?: RequestQuality[];
   /** How far the active request's downloads are. Only the title detail carries it. */
   download?: RequestDownload;
 }
@@ -2077,6 +2082,11 @@ export interface CreateMediaRequestInput {
   backdrop_path?: string;
   /** Series only: the seasons to request. Omitted: every aired season not yet in the library. */
   seasons?: number[];
+  /**
+   * The qualities to request. Only an admin account may ask for 2160p.
+   * Omitted: 1080p, plus 4K when the server-wide force-dual switch is on.
+   */
+  qualities?: RequestQuality[];
 }
 
 /** The download server details (integration_*, instance_name, route_name, external_*, last_error) reach admins only. */
@@ -2121,6 +2131,8 @@ export interface MediaRequest {
   requested_by_user_id?: number;
   requested_by_profile_id?: string;
   is_anime?: boolean;
+  /** The qualities the request asks for; absent from servers that predate it. */
+  requested_qualities?: RequestQuality[];
   /** Series: the requested seasons; empty means the whole series. */
   seasons?: number[];
   /** Series season requests: each requested season's episodes, once the series is in the library. */
