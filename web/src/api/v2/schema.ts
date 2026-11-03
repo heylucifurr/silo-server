@@ -4560,23 +4560,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v2/admin/requests/{id}/delete": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Manage media requests and their configuration. */
-    post: operations["adminDeleteRequest"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/v2/admin/requests/{id}/decline": {
     parameters: {
       query?: never;
@@ -4588,6 +4571,23 @@ export interface paths {
     put?: never;
     /** Manage media requests and their configuration. */
     post: operations["adminDeclineRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/admin/requests/{id}/delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Manage media requests and their configuration. */
+    post: operations["adminDeleteRequest"];
     delete?: never;
     options?: never;
     head?: never;
@@ -25447,6 +25447,8 @@ export interface components {
     FeatureStatus: {
       /** @description Whether the current principal may use the capability */
       allowed: boolean;
+      /** @description Whether the viewer may ask for a 4K request. Only an admin account may; a non-admin always requests 1080p. */
+      can_request_4k: boolean;
       /** @description Whether the Discover page follows an admin-defined layout: listDiscoverSections may hold rows beyond the six built-in ones, in any order, and lists every row in row_order; getDiscoverRow pages any title row. */
       discover_rows_supported: boolean;
       /** @description Whether the server reports download progress (download on requests, their targets, the title detail's request state, and watchlist titles). Whether a given request has any depends on its download server's request plugin. */
@@ -25455,6 +25457,8 @@ export interface components {
       /** @description Whether a series already in the library can be requested for the seasons it is missing. False while a download server that takes series uses a request plugin that cannot fetch individual seasons, so such a series stays already_available. */
       missing_seasons_requestable: boolean;
       rating_restrictions_enforced: boolean;
+      /** @description Whether an enabled request connection takes 4K requests, so offering the 4K choice is meaningful. */
+      request_4k_available: boolean;
       requests_enabled: boolean;
       /** @description Opaque revision of this document */
       revision: string;
@@ -27487,6 +27491,8 @@ export interface components {
        * @example 1
        */
       requested_by_user_id?: string;
+      /** @description The qualities the request asks for: 1080p, 2160p, or both. Empty, never null */
+      requested_qualities: ("1080p" | "2160p")[];
       /** @description Series season requests: each requested season's episodes, once the series is in the library; empty otherwise */
       season_progress: components["schemas"]["RequestSeasonProgress"][];
       /** @description Series: the requested season numbers; empty means the whole series (requests made through v1 or before season requests) */
@@ -27552,6 +27558,14 @@ export interface components {
       overview?: string;
       /** @description TMDB image path */
       poster_path?: string;
+      /**
+       * @description The qualities to request: 1080p, 2160p, or both. Admins only for 2160p
+       * @example [
+       *       "1080p",
+       *       "2160p"
+       *     ]
+       */
+      qualities?: ("1080p" | "2160p")[];
       /**
        * @description Series only: the season numbers to request, starting at 1 (a season below 1 is refused). Omitted: every aired season not yet complete in the library
        * @example [
@@ -31377,6 +31391,8 @@ export interface components {
        * @example false
        */
       requested_by_viewer: boolean;
+      /** @description The qualities the active request asks for: 1080p, 2160p, or both */
+      requested_qualities?: ("1080p" | "2160p")[];
       /**
        * @description User-facing state of the active request, when one exists: pending, approved or processing
        * @example pending
@@ -77207,6 +77223,146 @@ export interface operations {
       };
     };
   };
+  adminDeleteRequest: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path: {
+        /** @description The request */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdminRequestActionInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MediaRequest"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   listAdminRequestEvents: {
     parameters: {
       query?: never;
@@ -77312,38 +77468,6 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["Problem"];
-        };
-      };
-    };
-  };
-  adminDeleteRequest: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
-        "X-Profile-Id"?: string;
-        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-        "X-Profile-Token"?: string;
-      };
-      path: {
-        /** @description The request */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AdminRequestActionInputBody"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MediaRequest"];
         };
       };
     };

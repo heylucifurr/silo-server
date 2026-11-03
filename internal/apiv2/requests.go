@@ -35,7 +35,7 @@ type RequestMediaState struct {
 	Download *RequestDownload `json:"download,omitempty" doc:"How far the active request's downloads are, while its download server reports them. Only the title detail (getRequestMediaDetail) and the watchlist titles (listWatchlistTitles) carry it"`
 	// RequestedQualities are the qualities the active request asks for; a
 	// client uses them to offer only the qualities not already asked for.
-	RequestedQualities []string `json:"requested_qualities,omitempty" doc:"The qualities the active request asks for: 1080p, 2160p, or both"`
+	RequestedQualities []string `json:"requested_qualities,omitempty" enum:"1080p,2160p" doc:"The qualities the active request asks for: 1080p, 2160p, or both"`
 }
 
 // RequestDownload is how far downloads are, as the download server last
@@ -234,7 +234,7 @@ type MediaRequest struct {
 	RequestedByProfileID ID                      `json:"requested_by_profile_id,omitempty" example:"p-owner"`
 	IntegrationKind      string                  `json:"integration_kind,omitempty" doc:"Admins only: the download server's kind" example:"radarr"`
 	IsAnime              bool                    `json:"is_anime"`
-	RequestedQualities   []string                `json:"requested_qualities" doc:"The qualities the request asks for: 1080p, 2160p, or both. Empty, never null"`
+	RequestedQualities   []string                `json:"requested_qualities" enum:"1080p,2160p" doc:"The qualities the request asks for: 1080p, 2160p, or both. Empty, never null"`
 	Targets              []RequestTarget         `json:"targets" doc:"Empty, never null"`
 	ExternalID           string                  `json:"external_id,omitempty" doc:"Admins only: the integration's own identifier"`
 	ExternalStatus       string                  `json:"external_status,omitempty" doc:"Admins only: the status as the download server reports it"`

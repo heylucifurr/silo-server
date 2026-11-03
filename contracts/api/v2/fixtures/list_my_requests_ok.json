@@ -16,6 +16,9 @@
       "requested_by_user_id": "1",
       "requested_by_profile_id": "p-owner",
       "is_anime": false,
+      "requested_qualities": [
+        "1080p"
+      ],
       "targets": [
         {
           "id": "42",
@@ -47,6 +50,9 @@
       "requested_by_user_id": "1",
       "requested_by_profile_id": "p-owner",
       "is_anime": false,
+      "requested_qualities": [
+        "1080p"
+      ],
       "targets": [
         {
           "id": "42",

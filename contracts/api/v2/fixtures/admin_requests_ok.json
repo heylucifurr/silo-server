@@ -17,6 +17,9 @@
       "requested_by_profile_id": "p-owner",
       "integration_kind": "radarr",
       "is_anime": false,
+      "requested_qualities": [
+        "1080p"
+      ],
       "targets": [
         {
           "id": "42",
@@ -55,6 +58,9 @@
       "requested_by_profile_id": "p-owner",
       "integration_kind": "radarr",
       "is_anime": false,
+      "requested_qualities": [
+        "1080p"
+      ],
       "targets": [
         {
           "id": "42",
@@ -93,6 +99,9 @@
       "requested_by_profile_id": "p-owner",
       "integration_kind": "radarr",
       "is_anime": false,
+      "requested_qualities": [
+        "1080p"
+      ],
       "targets": [
         {
           "id": "42",
