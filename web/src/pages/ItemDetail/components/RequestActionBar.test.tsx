@@ -198,10 +198,10 @@ describe("RequestActionBar 4K choice", () => {
     renderBar(heat);
 
     fireEvent.click(screen.getByRole("button", { name: "Request movie" }));
-    expect(mutate.mock.calls[0][0]).not.toHaveProperty("qualities");
+    expect(mutate.mock.calls.at(0)?.[0]).not.toHaveProperty("qualities");
 
     fireEvent.click(screen.getByRole("button", { name: "Request 4K" }));
-    expect(mutate.mock.lastCall?.[0]).toMatchObject({ qualities: ["1080p", "2160p"] });
+    expect(mutate.mock.calls.at(-1)?.[0]).toMatchObject({ qualities: ["1080p", "2160p"] });
   });
 
   it("adds only 4K when the title is already requested in HD", () => {
@@ -243,4 +243,3 @@ describe("RequestActionBar 4K choice", () => {
     expect(screen.queryByRole("button", { name: "Request 4K" })).toBeNull();
   });
 });
-
