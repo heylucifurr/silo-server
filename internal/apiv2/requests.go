@@ -273,7 +273,7 @@ type MediaRequestCreate struct {
 	// Qualities is the per-request quality choice. Only an admin account may
 	// ask for 2160p; a non-admin that sends it is refused. Omitted: HD, plus
 	// 4K when the server-wide force-dual switch is on for an admin.
-	Qualities []string `json:"qualities,omitempty" enum:"1080p,2160p" maxItems:"2" doc:"The qualities to request: 1080p, 2160p, or both. Admins only for 2160p" example:"[1080p,2160p]"`
+	Qualities []string `json:"qualities,omitempty" enum:"1080p,2160p" maxItems:"2" doc:"The qualities to request: 1080p, 2160p, or both. Admins only for 2160p" example:"[\"1080p\",\"2160p\"]"`
 }
 
 // MediaRequestCreateInput is the createRequest request.
