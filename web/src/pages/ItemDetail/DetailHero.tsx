@@ -240,7 +240,7 @@ export default function DetailHero({
             {/* Info column */}
             <div
               key={isViewportBounded ? title : undefined}
-              className="detail-hero-copy max-w-3xl"
+              className="detail-hero-copy max-w-5xl"
               style={{ textShadow: "var(--hero-text-shadow, 0 1px 3px rgb(0 0 0 / 40%))" }}
             >
               <div

@@ -90,6 +90,16 @@
     display: none; /* Chrome, Safari, Edge: hide vertical scrollbar */
   }
 
+  /* The copy column carries more width than its text so the action row can
+     stay on one line as the request pill's label changes (Request movie ->
+     Requested is a label's worth narrower). The row takes the extra width;
+     every other child keeps the reading measure, so no text line grows
+     longer. Narrow screens are unaffected: the row wraps once the column can
+     no longer fit it. */
+  .detail-hero-copy > :not(.detail-action-bar) {
+    max-width: 48rem;
+  }
+
   @media (min-width: 1024px) {
     .episode-detail-viewport {
       height: calc(100dvh - var(--detail-header-height, 0px) - var(--detail-player-height));
