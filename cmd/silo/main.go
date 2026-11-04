@@ -79,6 +79,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/jellycompat"
 	"github.com/Silo-Server/silo-server/internal/lantls"
 	"github.com/Silo-Server/silo-server/internal/libraryingest"
+	"github.com/Silo-Server/silo-server/internal/librarykind"
 	"github.com/Silo-Server/silo-server/internal/librarymonitor"
 	"github.com/Silo-Server/silo-server/internal/literaryworks"
 	"github.com/Silo-Server/silo-server/internal/logfilter"
@@ -225,6 +226,48 @@ func libraryPathProvider(repo *catalog.FolderRepository) func(context.Context) [
 		defer cancel()
 		return repo.DistinctLibraryPaths(queryCtx)
 	})
+}
+
+// requestScanQueue scans the enabled libraries that can hold a media type. The
+// status sync asks for one when Seerr reports a requested title's media
+// available: the file is on disk, and waiting for the next scheduled scan would
+// leave the request finished but showing as not in the library.
+type requestScanQueue struct {
+	folders *catalog.FolderRepository
+	queue   *scanqueue.Service
+}
+
+// ScanLibrariesFor implements requests.LibraryScanner.
+func (q requestScanQueue) ScanLibrariesFor(ctx context.Context, mediaType mediarequests.MediaType) error {
+	folders, err := q.folders.GetEnabled(ctx)
+	if err != nil {
+		return fmt.Errorf("listing libraries to scan: %w", err)
+	}
+	var errs []error
+	for _, folder := range folders {
+		if folder == nil || !libraryHoldsMediaType(folder.Type, mediaType) {
+			continue
+		}
+		if _, err := q.queue.EnqueueLibraryScan(ctx, folder.ID, "request_fulfilled"); err != nil {
+			errs = append(errs, fmt.Errorf("scanning library %d: %w", folder.ID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// libraryHoldsMediaType reports whether a library kind can hold a requested
+// title: a movie request belongs to a movie library, a series request to a TV
+// one, and a mixed library holds both.
+func libraryHoldsMediaType(libraryType string, mediaType mediarequests.MediaType) bool {
+	kinds := librarykind.Of(libraryType)
+	switch mediaType {
+	case mediarequests.MediaTypeMovie:
+		return kinds.Movie || kinds.Mixed
+	case mediarequests.MediaTypeSeries:
+		return kinds.TV || kinds.Mixed
+	default:
+		return false
+	}
 }
 
 // cachedLibraryPaths wraps a library-root query so a failed read reuses the last
@@ -3530,6 +3573,11 @@ func main() {
 		// does not expose: the admin delete and the reconcile existence check.
 		api.AttachRequestTargets(requestReconcileSvc)
 		requestReconcileSvc.SetGroupPolicyProvider(accessGroupStore)
+		if deps.FolderRepo != nil && deps.LibraryScanQueue != nil {
+			// A request Seerr reports as available is on disk somewhere: scan
+			// the libraries that can hold it so the catalog sees the file.
+			requestReconcileSvc.SetLibraryScanner(requestScanQueue{folders: deps.FolderRepo, queue: deps.LibraryScanQueue})
+		}
 		if userStoreProvider != nil {
 			userRepo := auth.NewUserRepository(deps.DB)
 			profileTokens := access.NewProfileTokenService(cfg.Auth.JWTSecret, 0)

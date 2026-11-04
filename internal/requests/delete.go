@@ -57,34 +57,37 @@ func (s *Service) DeleteRequest(ctx context.Context, viewer Viewer, id string, o
 		// Nothing was ever sent for the selected qualities: close the request.
 		return s.removeRequest(ctx, req, viewer, opts)
 	}
-	var updated *Request
+	// The download servers first: a failure leaves the Silo record untouched, so
+	// the admin can retry or choose Silo-only.
 	for _, target := range selected {
 		if err := s.deleteDownstream(ctx, target, opts); err != nil {
 			return nil, err
 		}
-		req2, err := s.store.RemoveTarget(ctx, target.ID, viewer)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue // another actor removed it first
-			}
-			return nil, err
-		}
-		updated = req2
+	}
+	// Removing the targets and closing the request is one write. Between the
+	// two, the request reads as approved and active with no targets — the shape
+	// the reconcile pass submits — so a separate close would let a title the
+	// admin just deleted return from Seerr as a fresh request.
+	ids := make([]int64, 0, len(selected))
+	for _, target := range selected {
+		ids = append(ids, target.ID)
+	}
+	updated, _, err := s.store.RemoveTargetsAndClose(ctx, req.ID, ids, StateGuard{}, viewer,
+		deleteMessage(Target{Quality: ""}, opts))
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		// Another actor removed every selected target first: report the request
+		// as it stands.
+		return s.store.GetRequest(ctx, req.ID)
+	}
+	for _, target := range selected {
 		if err := s.store.RecordEvent(ctx, req.ID, "target_deleted", viewer, deleteMessage(target, opts)); err != nil {
 			return nil, err
 		}
 	}
-	remaining, err := s.store.ListTargets(ctx, req.ID)
-	if err != nil {
-		return nil, err
-	}
-	if len(remaining) == 0 {
-		return s.removeRequest(ctx, req, viewer, opts)
-	}
-	if updated != nil {
-		return updated, nil
-	}
-	return s.store.GetRequest(ctx, req.ID)
+	return updated, nil
 }
 
 // deleteDownstream hands a submitted target to the download-service deleter.

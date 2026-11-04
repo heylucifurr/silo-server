@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -245,6 +246,115 @@ func (r *Repository) RemoveTarget(ctx context.Context, targetID int64, actor Vie
 // UpdateTargetStatus updates one target and recomputes the parent request's
 // aggregate status/outcome, all in one transaction. A target that completes
 // or fails loses its download progress.
+// RemoveTargetsAndClose deletes the given targets and, when none remain, closes
+// the request as removed with its row and history kept — in one transaction. The
+// close cannot be a separate write: between the two, the request's aggregate is
+// approved and active with no targets, which is exactly the shape the reconcile
+// pass submits, so a title Seerr dropped, or one an admin deleted, would be
+// requested from Seerr all over again. When targets remain the aggregate follows
+// them, as RemoveTarget does.
+//
+// from is the guard the closing write accepts, so an automatic retirement leaves
+// an outcome another actor already decided alone while an admin's delete closes
+// whatever it finds. Closing records one outcome_removed history entry with
+// message and drops the title's followers, as SetOutcome does. The write reports
+// the request as stored and whether this call closed it; a nil request means the
+// targets were already gone.
+func (r *Repository) RemoveTargetsAndClose(ctx context.Context, requestID string, targetIDs []int64,
+	from StateGuard, actor Viewer, message string) (*Request, bool, error) {
+	if len(targetIDs) == 0 {
+		return nil, false, nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("begin target removal transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `DELETE FROM media_request_targets WHERE request_id = $1 AND id = ANY($2)`, requestID, targetIDs)
+	if err != nil {
+		return nil, false, fmt.Errorf("remove targets: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, false, nil // another actor removed them first
+	}
+	var remaining int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM media_request_targets WHERE request_id = $1`, requestID).Scan(&remaining); err != nil {
+		return nil, false, fmt.Errorf("count remaining targets: %w", err)
+	}
+	if remaining > 0 {
+		// Something else is still in flight for this request — another
+		// quality tier, another Seerr request, another integration — so it
+		// stays open and the aggregate follows those targets.
+		req, err := r.recomputeAggregate(ctx, tx, requestID, actor)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, false, fmt.Errorf("commit target removal transaction: %w", err)
+		}
+		return req, false, nil
+	}
+	message = strings.TrimSpace(message)
+	statuses, outcomes, unsent := guardArgs(from)
+	req, err := scanRequest(tx.QueryRow(ctx, `
+		UPDATE media_requests
+		SET status = CASE WHEN outcome = 'active' THEN 'approved' ELSE status END,
+		    outcome = $5,
+		    updated_at = now()
+		WHERE id = $1
+		  AND `+guardCondition+`
+		RETURNING `+requestColumns(), requestID, statuses, outcomes, unsent, OutcomeRemoved))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			miss := guardMiss(ctx, tx, requestID)
+			if errors.Is(miss, ErrNotFound) {
+				return nil, false, miss
+			}
+			if !errors.Is(miss, ErrInvalidState) {
+				return nil, false, miss
+			}
+			// The guard refused: another actor closed the request first. The
+			// targets are stale either way, and the outcome is theirs to
+			// keep, so the removals still land.
+			if err := tx.Commit(ctx); err != nil {
+				return nil, false, fmt.Errorf("commit target removal transaction: %w", err)
+			}
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("close request after target removal: %w", err)
+	}
+	if err := r.recordEvent(ctx, tx, requestID, "outcome_removed", actor, message); err != nil {
+		return nil, false, err
+	}
+	if err := forgetTitleFollows(ctx, tx, req); err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, fmt.Errorf("commit target removal transaction: %w", err)
+	}
+	return req, true, nil
+}
+
+// LatestEventType names a request's most recent history entry type, or "" when
+// it has no history. The request's own row is not involved: callers use it to
+// tell what last happened to a request they already hold.
+func (r *Repository) LatestEventType(ctx context.Context, requestID string) (string, error) {
+	var eventType string
+	err := r.pool.QueryRow(ctx, `
+		SELECT event_type FROM media_request_events
+		WHERE request_id = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1`, requestID).Scan(&eventType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("latest request event: %w", err)
+	}
+	return eventType, nil
+}
+
 func (r *Repository) UpdateTargetStatus(ctx context.Context, targetID int64, status Status,
 	externalID, externalStatus, lastErr string, actor Viewer) (*Request, error) {
 	tx, err := r.pool.Begin(ctx)

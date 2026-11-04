@@ -124,8 +124,17 @@ type Store interface {
 	// RemoveTarget deletes one target and recomputes its request's status and
 	// outcome from the remaining targets, in one transaction.
 	RemoveTarget(ctx context.Context, targetID int64, actor Viewer) (*Request, error)
+	// RemoveTargetsAndClose deletes the given targets and, when none remain,
+	// closes the request as removed — all in one transaction, because a request
+	// left approved and active with no targets would be submitted again. When
+	// targets remain the aggregate follows them. Targets another actor already
+	// removed are skipped.
+	RemoveTargetsAndClose(ctx context.Context, requestID string, targetIDs []int64, from StateGuard, actor Viewer, message string) (*Request, bool, error)
 	// RecordEvent appends a history entry to a request.
 	RecordEvent(ctx context.Context, requestID, eventType string, actor Viewer, message string) error
+	// LatestEventType names the request's most recent history entry type, or ""
+	// when it has no history.
+	LatestEventType(ctx context.Context, requestID string) (string, error)
 	// UpdateTargetStatus also clears the target's download progress when it
 	// completes or fails.
 	UpdateTargetStatus(ctx context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, actor Viewer) (*Request, error)

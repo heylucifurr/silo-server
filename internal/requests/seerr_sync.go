@@ -168,6 +168,57 @@ func (s *Service) SyncSeerrRequests(ctx context.Context, limit int) (SeerrSyncRe
 	return result, syncOutcome(result, firstErr)
 }
 
+// LibraryScanner asks for a scan of the libraries that can hold a title.
+// A request completed from Seerr's "available" has a file somewhere the
+// scanner has not necessarily seen yet, so the sync asks for a scan instead of
+// waiting for the next scheduled one; the catalog's presence check then marks
+// the request as in the library.
+type LibraryScanner interface {
+	ScanLibrariesFor(ctx context.Context, mediaType MediaType) error
+}
+
+// requestFulfillmentScan asks the wired scanner for a scan of the libraries
+// that can hold the media type. A failure is logged and dropped: the completion
+// already stands, and the next scheduled scan finds the file anyway.
+func (s *Service) requestFulfillmentScan(ctx context.Context, mediaType MediaType) {
+	if s == nil || s.libraryScanner == nil {
+		return
+	}
+	if err := s.libraryScanner.ScanLibrariesFor(ctx, mediaType); err != nil {
+		slog.WarnContext(ctx, "requests: scan after a Seerr completion failed", "component", "requests",
+			"media_type", mediaType, "err", err)
+	}
+}
+
+// seerrRetiredEvent is the history entry the retirement writes. A request whose
+// newest entry is this one, and which is still active with nothing to check, is
+// one whose closing write did not land.
+const seerrRetiredEvent = "removed_in_seerr"
+
+// closeUnfinishedRetirement closes a request that Seerr no longer has but that
+// is still active, because the retirement that removed its targets did not
+// finish closing it. Nothing about the state says so on its own — a request
+// approved and waiting to be submitted looks the same — so the history decides:
+// the retirement is the last thing that happened to it, so no later approval or
+// retry stands behind it.
+func (s *Service) closeUnfinishedRetirement(ctx context.Context, req Request) (seerrChange, error) {
+	latest, err := s.store.LatestEventType(ctx, req.ID)
+	if err != nil {
+		return seerrChangeNone, err
+	}
+	if latest != seerrRetiredEvent {
+		return seerrChangeSkipped, nil
+	}
+	if _, err := s.store.SetOutcome(ctx, req.ID, StateGuard{Outcomes: []Outcome{OutcomeActive}},
+		OutcomeRemoved, Viewer{}, seerrRemovedMessage); err != nil {
+		if errors.Is(err, ErrInvalidState) || errors.Is(err, ErrNotFound) {
+			return seerrChangeSkipped, nil // a person closed it meanwhile, or it is gone
+		}
+		return seerrChangeNone, err
+	}
+	return seerrChangeRemoved, nil
+}
+
 // syncOutcome turns a run's per-request failures into the run's own error. A run
 // that got an answer for at least one request completed, with the failures
 // counted in its result data and retried by the next run; a run Seerr answered
@@ -348,6 +399,15 @@ func (s *Service) syncSeerrRequest(ctx context.Context, req Request, fc *fulfill
 		groups[key].targets = append(groups[key].targets, target)
 	}
 	if len(order) == 0 {
+		// Nothing to read a status from. A request left here with no targets at
+		// all is usually just approved and not yet submitted, which the
+		// reconcile pass handles. One whose last history entry is the Seerr
+		// retirement is a request Seerr no longer has whose closing write did
+		// not land: left as it is, the reconcile pass would submit it again,
+		// which is how a title Seerr dropped comes back. Close it now.
+		if len(targets) == 0 {
+			return s.closeUnfinishedRetirement(ctx, req)
+		}
 		return seerrChangeSkipped, nil
 	}
 
@@ -395,6 +455,7 @@ func (s *Service) syncSeerrRequest(ctx context.Context, req Request, fc *fulfill
 			return seerrChangeDeclined, nil
 		}
 		moved := make([]string, 0, len(g.targets))
+		completed := false
 		for _, target := range g.targets {
 			next, changed := seerrTargetStatus(status, target)
 			if !changed {
@@ -409,12 +470,20 @@ func (s *Service) syncSeerrRequest(ctx context.Context, req Request, fc *fulfill
 			moved = append(moved, fmt.Sprintf("%s %s", target.Quality, seerrStatusPhrase(next)))
 			if next == StatusCompleted {
 				change = seerrChangeCompleted
+				completed = true
 			} else if change == seerrChangeNone {
 				change = seerrChangeDownloading
 			}
 		}
 		if len(moved) > 0 {
 			message = "Synced from Seerr: " + strings.Join(moved, ", ")
+		}
+		if completed {
+			// Seerr has the media: the file is on disk, but the catalog may
+			// not have scanned it yet. Ask for a scan of the libraries that
+			// can hold it, so the request shows as in the library rather than
+			// waiting for the next scheduled scan.
+			s.requestFulfillmentScan(ctx, req.MediaType)
 		}
 	}
 	if change == seerrChangeNone {

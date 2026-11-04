@@ -88,8 +88,48 @@ func TestDeleteRequestRemovesEveryTargetAndSoftRemoves(t *testing.T) {
 	if q := deleter.qualities(); len(q) != 2 {
 		t.Fatalf("downstream calls = %v, want both qualities", q)
 	}
-	if events := store.events["r1"]; len(events) != 2 {
+	// The closing write records its own entry inside the removal transaction,
+	// and the per-target delete entries follow.
+	events := store.events["r1"]
+	if len(events) != 3 {
+		t.Fatalf("events = %+v, want the close and a delete event per target", events)
+	}
+	if events[0].EventType != "outcome_removed" {
+		t.Fatalf("events = %+v, want the close recorded with the removals", events)
+	}
+	if events[1].EventType != "target_deleted" || events[2].EventType != "target_deleted" {
 		t.Fatalf("events = %+v, want a delete event per target", events)
+	}
+}
+
+// TestDeleteRequestLeavesNothingToSubmit: the removals and the closing write are
+// one transaction, so the reconcile pass that follows a delete never finds the
+// request in the shape it submits — approved and active with no targets — and
+// Seerr is never asked for a title the admin just deleted.
+func TestDeleteRequestLeavesNothingToSubmit(t *testing.T) {
+	store := newFakeStore()
+	store.integrations = []Integration{seerrInst("seerr", true)}
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	svc := newTestService(store)
+	svc.SetTargetService(&fakeDeleter{})
+	router := &fakeRouterProvider{}
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.DeleteRequest(context.Background(), Viewer{UserID: 1, IsAdmin: true}, "r1", DeleteOptions{}); err != nil {
+		t.Fatalf("DeleteRequest: %v", err)
+	}
+	if req := store.requests["r1"]; req.Outcome != OutcomeRemoved {
+		t.Fatalf("outcome = %s, want removed", req.Outcome)
+	}
+
+	// The pass walks the request the way the repository lists a candidate and
+	// must refuse it: a removed request is not submitted.
+	store.candidates = []*Request{store.requests["r1"]}
+	if _, err := svc.ReconcileRequests(context.Background(), 100); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if router.fulfillCalls != 0 {
+		t.Fatalf("router fulfill calls = %d, want 0 after a delete", router.fulfillCalls)
 	}
 }
 

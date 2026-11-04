@@ -536,6 +536,35 @@ Seerr reporting the media available completes a failed target too, since that is
 a fact about the library, while a download Seerr sees under way says nothing
 about why the target failed — retrying stays the admin's call.
 
+**A request Seerr dropped is never sent back.** That is the rule the whole path
+is built around, because the failure it prevents is a loop: Silo deletes the
+request's targets, and the reconcile pass — which submits any request that is
+approved and active with no targets, the shape of a fresh approval — asks Seerr
+for the title again, so every deletion in Seerr comes back as a new request.
+Two things hold the rule up:
+
+- Retiring targets, recording the history entry and closing the request are **one
+  transaction** (`Store.RetireSeerrTargets`). A separate close would leave the
+  request reading as approved and active with no targets in between, and that
+  state outlives the moment it happens: it is what the pass submits.
+- A request left in that shape anyway — a half-finished retirement from an older
+  build, which is what a deployment upgrading into this code has — is closed by
+  the next run. Its own state cannot say so, since a fresh approval looks the
+  same, so the history decides: if the newest entry is the Seerr retirement
+  (`removed_in_seerr`) and nothing later stands behind it, the request closes as
+  Removed instead of being submitted.
+
+Only a person starts a request again: re-requesting it from a title page, or an
+admin's Retry on a failed one, each of which writes its own approval first.
+
+**Seerr having the media asks for a scan.** When Seerr reports a target's media
+available, the target completes — that is what marks the request Done — and the
+sync asks the library scan queue for a scan of the libraries that can hold that
+media type (`request_fulfilled`), so the file reaches the catalog without
+waiting for the next scheduled scan and the request stops reading as "not in the
+library". A scan that cannot be queued is logged and dropped: the completion
+stands, and the scheduled scan finds the file anyway.
+
 Two kinds of request are left as they are. A request a person closed — declined,
 cancelled or removed — keeps what a person decided: the full sweep below walks
 those too, and Seerr's answer for one is usually a 404, since closing the request
@@ -543,12 +572,13 @@ removed it there. A request whose targets all completed is left alone as well,
 since its Seerr request may be gone while the library still has the file.
 
 Retiring and closing are the reconcile pass's own code (`retireSeerrTargets` in
-`internal/requests/reconcile_seerr.go`), so both paths record the same
-`removed_in_seerr` history line and both guard the closing write on a request
-that is still active. A run records what it moved as one `synced_from_seerr`
-event naming each target and its new state ("Synced from Seerr: 1080p is
-available"); a closing write records its own reason, so the sync adds no second
-entry for it. A request Seerr reports unchanged records nothing.
+`internal/requests/reconcile_seerr.go`, which writes through
+`Store.RetireSeerrTargets`), so both paths record the same `removed_in_seerr`
+history line and both leave an outcome another actor already decided alone. A run
+records what it moved as one `synced_from_seerr` event naming each target and its
+new state ("Synced from Seerr: 1080p is available"); a closing write records the
+reason itself, so the sync adds no second entry for it. A request Seerr reports
+unchanged records nothing.
 
 **Seerr offline.** A lookup that fails counts in the run's `errors` and leaves
 that request untouched, so an outage is never read as a deletion; the rest of
@@ -703,9 +733,12 @@ An admin can also delete a request outright (`POST
 /api/v2/admin/requests/{id}/delete`, admins only). The Silo record closes as
 `removed` — a soft removal, so the row and its history stay for the audit trail
 — and, unless the caller asks for Silo only, the title is removed from Radarr or
-Sonarr and the request is deleted from Seerr. Delete is the tool for a request
-Silo no longer wants but the download service still holds; cancelling cannot
-reach a request that has already been sent.
+Sonarr and the request is deleted from Seerr. Removing the targets and closing
+the record is **one transaction**: a request left approved and active with no
+targets is the shape the reconcile pass submits, so a separate close would let
+the reconcile pass ask Seerr for the title the admin just deleted. Delete is the
+tool for a request Silo no longer wants but the download service still holds;
+cancelling cannot reach a request that has already been sent.
 
 These details of that call matter, each learned the hard way:
 

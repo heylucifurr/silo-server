@@ -2,7 +2,6 @@ package requests
 
 import (
 	"context"
-	"errors"
 	"strings"
 )
 
@@ -49,49 +48,30 @@ func (s *Service) retireMissingSeerrTargets(ctx context.Context, req Request, ta
 	return s.retireSeerrTargets(ctx, req, missing)
 }
 
-// retireSeerrTargets removes targets Seerr no longer has and, when none are
-// left, closes the request as Removed with its row and history kept. It
-// returns the request after the removals (nil when none of the targets was
-// still there) and whether the request ended up removed.
+// retireSeerrTargets retires targets Seerr no longer has and, when none are
+// left, closes the request as Removed with its row and history kept. The
+// deletions and the closing write are one call: a request left approved and
+// active with no targets is one the reconcile pass would submit, which is how a
+// title Seerr dropped comes back. It reports whether the request ended up
+// removed.
 //
 // The status sync calls it once Seerr answers 404 for a request, the reconcile
-// pass once its own existence check says the same. Closing is guarded on an
-// active request: one another actor closed meanwhile, or a target that was
-// already gone, leaves the request as it is.
+// pass once its own existence check says the same.
 func (s *Service) retireSeerrTargets(ctx context.Context, req Request, targets []Target) (*Request, bool, error) {
-	var updated *Request
+	ids := make([]int64, 0, len(targets))
 	for _, target := range targets {
-		next, err := s.store.RemoveTarget(ctx, target.ID, Viewer{})
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue // another actor removed it first
-			}
-			return updated, false, err
-		}
-		updated = next
-		if err := s.store.RecordEvent(ctx, req.ID, "removed_in_seerr", Viewer{}, seerrRemovedMessage); err != nil {
-			return updated, false, err
-		}
+		ids = append(ids, target.ID)
 	}
-	if updated == nil {
-		return nil, false, nil
+	updated, removed, err := s.store.RemoveTargetsAndClose(ctx, req.ID, ids,
+		StateGuard{Outcomes: []Outcome{OutcomeActive}}, Viewer{}, seerrRemovedMessage)
+	if err != nil || !removed {
+		return updated, removed, err
 	}
-	remaining, err := s.store.ListTargets(ctx, req.ID)
-	if err != nil {
-		return updated, false, err
+	// The closing write records the outcome; this names where it came from, and
+	// is the marker the next run looks for on a request whose close did not
+	// land.
+	if err := s.store.RecordEvent(ctx, req.ID, seerrRetiredEvent, Viewer{}, seerrRemovedMessage); err != nil {
+		return updated, removed, err
 	}
-	if len(remaining) > 0 {
-		return updated, false, nil
-	}
-	final, err := s.store.SetOutcome(ctx, req.ID, StateGuard{Outcomes: []Outcome{OutcomeActive}},
-		OutcomeRemoved, Viewer{}, seerrRemovedMessage)
-	if err != nil {
-		if errors.Is(err, ErrInvalidState) || errors.Is(err, ErrNotFound) {
-			// A person closed the request, or it is gone: the targets are
-			// retired either way, and the outcome is theirs to keep.
-			return updated, false, nil
-		}
-		return updated, false, err
-	}
-	return final, true, nil
+	return updated, removed, nil
 }

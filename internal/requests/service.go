@@ -93,6 +93,7 @@ type Service struct {
 	lifecycle         LifecycleNotifier
 	watchlistPref     WatchlistPreference
 	titleObserver     TitleObserver
+	libraryScanner    LibraryScanner
 	discoverSnapshots DiscoverSnapshots
 	discoverRefresher DiscoverListRefresher
 	Now               func() time.Time
@@ -124,6 +125,10 @@ func NewService(store Store, tmdbClient TMDBClient, presence PresenceResolver) *
 }
 
 func (s *Service) SetRouterProvider(p RequestRouterProvider) { s.router = p }
+
+// SetLibraryScanner wires the scan queue the status sync asks for a scan when
+// Seerr reports a requested title's media available.
+func (s *Service) SetLibraryScanner(scanner LibraryScanner) { s.libraryScanner = scanner }
 
 func (s *Service) SetEntitlementResolver(r EntitlementResolver) { s.entitlements = r }
 

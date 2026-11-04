@@ -267,12 +267,143 @@ func TestSyncSeerrRequestsRemovesMissingRequest(t *testing.T) {
 	if req.Outcome != OutcomeRemoved {
 		t.Fatalf("outcome = %s, want removed", req.Outcome)
 	}
-	// The retirement records the reason in the request's history, which is
-	// kept; a removed request stores no outcome reason of its own.
+	// The retirement records why in the request's history, which is kept: the
+	// closing write's own entry, then the marker naming where the closure came
+	// from — newest, which is what tells a later run a retirement was left
+	// unfinished.
 	events, _ := store.ListEvents(context.Background(), "r1", 10)
-	if len(events) != 1 || events[0].EventType != "removed_in_seerr" || events[0].Message != seerrRemovedMessage {
-		t.Fatalf("events = %+v, want one removed_in_seerr event", events)
+	if len(events) != 2 || events[0].EventType != "outcome_removed" {
+		t.Fatalf("events = %+v, want the close then the retirement marker", events)
 	}
+	if events[1].EventType != seerrRetiredEvent || events[1].Message != seerrRemovedMessage {
+		t.Fatalf("events = %+v, want %s last with the reason", events, seerrRetiredEvent)
+	}
+}
+
+// TestSyncSeerrRequestsNeverLeavesARequestSubmittable: a request Seerr no longer
+// has must not end up approved and active with no targets, which is the state
+// the reconcile pass submits — that is how a title deleted in Seerr came back as
+// a new request. After the sync the request is closed, so the pass that follows
+// has nothing to submit.
+func TestSyncSeerrRequestsNeverLeavesARequestSubmittable(t *testing.T) {
+	t.Parallel()
+	svc, store, _ := newSeerrSyncService(t,
+		map[string]*SeerrRequestStatus{"ext-1080p": nil}, nil)
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	store.candidates = []*Request{store.requests["r1"]}
+	router := &fakeRouterProvider{}
+	svc.SetRouterProvider(router)
+
+	if _, err := svc.SyncSeerrRequests(context.Background(), 10); err != nil {
+		t.Fatalf("SyncSeerrRequests: %v", err)
+	}
+
+	// The fake lists the seeded candidates verbatim, so the pass walks this
+	// request as the repository would after its retirement: it must refuse to
+	// submit a request that is no longer active, and ask the router for nothing.
+	if _, err := svc.ReconcileRequests(context.Background(), 100); err != nil {
+		t.Fatalf("ReconcileRequests: %v", err)
+	}
+	if router.fulfillCalls != 0 {
+		t.Fatalf("router fulfill calls = %d, want 0: a title Seerr dropped must not be requested again", router.fulfillCalls)
+	}
+	if targets, _ := store.ListTargets(context.Background(), "r1"); len(targets) != 0 {
+		t.Fatalf("targets = %+v, want none: nothing was sent again", targets)
+	}
+}
+
+// TestSyncSeerrRequestsClosesARetirementThatDidNotFinish: a request left active
+// with no targets whose newest history entry is the Seerr retirement — an older
+// build's half-finished removal — is closed by the next run instead of being
+// submitted again.
+func TestSyncSeerrRequestsClosesARetirementThatDidNotFinish(t *testing.T) {
+	t.Parallel()
+	svc, store, _ := newSeerrSyncService(t, nil, nil)
+	seedDeleteRequest(store, "r1")
+	store.requests["r1"].Status = StatusApproved
+	if err := store.RecordEvent(context.Background(), "r1", "removed_in_seerr", Viewer{}, seerrRemovedMessage); err != nil {
+		t.Fatalf("RecordEvent: %v", err)
+	}
+	store.candidates = []*Request{store.requests["r1"]}
+
+	result, err := svc.SyncSeerrRequests(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncSeerrRequests: %v", err)
+	}
+	if result.Removed != 1 {
+		t.Fatalf("result = %+v, want 1 removed", result)
+	}
+	if req := store.requests["r1"]; req.Outcome != OutcomeRemoved {
+		t.Fatalf("outcome = %s, want removed", req.Outcome)
+	}
+}
+
+// TestSyncSeerrRequestsLeavesAFreshApprovalAlone: the same shape — active, no
+// targets — with an approval behind it is a request waiting to be submitted, and
+// the sync must not close it.
+func TestSyncSeerrRequestsLeavesAFreshApprovalAlone(t *testing.T) {
+	t.Parallel()
+	svc, store, fake := newSeerrSyncService(t, nil, nil)
+	seedDeleteRequest(store, "r1")
+	store.requests["r1"].Status = StatusApproved
+	if err := store.RecordEvent(context.Background(), "r1", "created", Viewer{}, ""); err != nil {
+		t.Fatalf("RecordEvent: %v", err)
+	}
+	store.candidates = []*Request{store.requests["r1"]}
+
+	result, err := svc.SyncSeerrRequests(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("SyncSeerrRequests: %v", err)
+	}
+	if result.Skipped != 1 || result.Removed != 0 {
+		t.Fatalf("result = %+v, want 1 skipped and none removed", result)
+	}
+	if req := store.requests["r1"]; req.Outcome != OutcomeActive || req.Status != StatusApproved {
+		t.Fatalf("request = %s/%s, want it left for the reconcile pass", req.Status, req.Outcome)
+	}
+	if got := len(fake.lookedUp()); got != 0 {
+		t.Fatalf("lookups = %d, want none: nothing to check without a target", got)
+	}
+}
+
+// TestSyncSeerrRequestsScansWhenSeerrReportsMedia: completing a target from
+// Seerr's available status asks for a scan of the libraries that can hold the
+// title. A run that completed nothing asks for none.
+func TestSyncSeerrRequestsScansWhenSeerrReportsMedia(t *testing.T) {
+	t.Parallel()
+	svc, store, _ := newSeerrSyncService(t,
+		map[string]*SeerrRequestStatus{"ext-1080p": {Found: true, MediaStatus: seerrMediaAvailable}}, nil)
+	seedDeleteRequest(store, "r1", submittedTarget(Quality1080p, "seerr"))
+	store.candidates = []*Request{store.requests["r1"]}
+	scanner := &fakeLibraryScanner{}
+	svc.SetLibraryScanner(scanner)
+
+	if _, err := svc.SyncSeerrRequests(context.Background(), 10); err != nil {
+		t.Fatalf("SyncSeerrRequests: %v", err)
+	}
+	if len(scanner.scanned) != 1 || scanner.scanned[0] != MediaTypeMovie {
+		t.Fatalf("scanned = %v, want the movie libraries once", scanner.scanned)
+	}
+
+	// The target is completed now, so a second run changes nothing and asks for
+	// no further scan.
+	if _, err := svc.SyncSeerrRequests(context.Background(), 10); err != nil {
+		t.Fatalf("SyncSeerrRequests: %v", err)
+	}
+	if len(scanner.scanned) != 1 {
+		t.Fatalf("scanned = %v, want no second scan", scanner.scanned)
+	}
+}
+
+// fakeLibraryScanner records the media types a scan was asked for.
+type fakeLibraryScanner struct {
+	scanned []MediaType
+	err     error
+}
+
+func (f *fakeLibraryScanner) ScanLibrariesFor(_ context.Context, mediaType MediaType) error {
+	f.scanned = append(f.scanned, mediaType)
+	return f.err
 }
 
 // TestSyncSeerrRequestsKeepsRequestWhenSeerrIsOffline: a lookup failure counts

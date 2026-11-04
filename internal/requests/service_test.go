@@ -1226,8 +1226,8 @@ func testViewer(userID int) Viewer {
 }
 
 type fakeStore struct {
-	mu            sync.Mutex
-	adminFilters  []ListFilter
+	mu           sync.Mutex
+	adminFilters []ListFilter
 	// adminList seeds ListAdmin's page output, newest first. Tests that page
 	// through the admin list (the first-deploy sync sweep) fill it; leaving it
 	// empty keeps ListAdmin returning nothing as before.
@@ -2198,6 +2198,72 @@ func (f *fakeStore) RecordEvent(_ context.Context, requestID, eventType string, 
 		RequestID: requestID, EventType: eventType, Message: message,
 	})
 	return nil
+}
+
+// RemoveTargetsAndClose mirrors the repository: the deletions and the closing
+// write are one call, so a caller can never observe the request active with no
+// targets. The guard decides whether this call closes the request.
+func (f *fakeStore) RemoveTargetsAndClose(_ context.Context, requestID string, targetIDs []int64, from StateGuard, _ Viewer, message string) (*Request, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	req := f.lookupLocked(requestID)
+	if req == nil {
+		return nil, false, ErrNotFound
+	}
+	remove := map[int64]bool{}
+	for _, id := range targetIDs {
+		remove[id] = true
+	}
+	kept := make([]Target, 0, len(f.targets[requestID]))
+	removedAny := false
+	for _, target := range f.targets[requestID] {
+		if remove[target.ID] {
+			removedAny = true
+			continue
+		}
+		kept = append(kept, target)
+	}
+	if !removedAny {
+		return nil, false, nil // another actor removed them first
+	}
+	f.targets[requestID] = kept
+	if len(kept) > 0 {
+		status, outcome := aggregateStatus(kept)
+		req.Status, req.Outcome = status, outcome
+		copy := *req
+		return &copy, false, nil
+	}
+	if !f.guardAccepts(from, req) {
+		return nil, false, nil // a person closed it first, and that outcome stands
+	}
+	req.Status = StatusApproved
+	req.Outcome = OutcomeRemoved
+	req.OutcomeReason = message
+	if f.events == nil {
+		f.events = map[string][]RequestEvent{}
+	}
+	f.events[requestID] = append(f.events[requestID], RequestEvent{
+		RequestID: requestID, EventType: "outcome_removed", Message: message, CreatedAt: time.Now().UTC(),
+	})
+	for key, owner := range f.followFor {
+		if owner == req.ID {
+			delete(f.follows, key)
+		}
+	}
+	copy := *req
+	return &copy, true, nil
+}
+
+// LatestEventType mirrors the repository: the newest history entry's type, by
+// creation order.
+func (f *fakeStore) LatestEventType(_ context.Context, requestID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	events := f.events[requestID]
+	if len(events) == 0 {
+		return "", nil
+	}
+	return events[len(events)-1].EventType, nil
 }
 
 func (f *fakeStore) UpdateTargetStatus(_ context.Context, targetID int64, status Status, externalID, externalStatus, lastErr string, _ Viewer) (*Request, error) {
