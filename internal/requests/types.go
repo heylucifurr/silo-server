@@ -44,7 +44,8 @@ const (
 	OutcomeFailed    Outcome = "failed"
 	// OutcomeRemoved is a request an admin deleted from the queue. The row and
 	// its history are kept so reconciliation and the audit trail stay intact,
-	// but it no longer counts as active and is hidden from the queue by default.
+	// but it no longer counts as active: it leaves the open views and lands in
+	// the queue's Done view, badged Removed.
 	OutcomeRemoved Outcome = "removed"
 )
 

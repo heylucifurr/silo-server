@@ -52,13 +52,15 @@ export type RequestQueueAction = "approve" | "decline" | "retry" | "cancel" | "d
  * What an admin can do with a request, by its view and the server's rules:
  * approve or decline what needs approval; cancel what is in progress while
  * nothing has been sent for it; retry or close (cancel) what failed. Delete is
- * offered everywhere: it closes the Silo record and removes the request from
- * its download server, which is how an admin cleans up a request they no longer
- * want, including one that is already done.
+ * offered everywhere else: it closes the Silo record and removes the request
+ * from its download server, which is how an admin cleans up a request they no
+ * longer want, including one that is already done. A request that was already
+ * removed offers nothing: it is closed here and gone from its server.
  */
 export function requestQueueActions(
   request: Pick<MediaRequest, "status" | "outcome" | "targets">,
 ): RequestQueueAction[] {
+  if (request.outcome === "removed") return [];
   const withdrawable = canWithdrawRequest(request);
   switch (requestQueueView(request)) {
     case "needs_approval":

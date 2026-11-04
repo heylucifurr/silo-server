@@ -1453,12 +1453,14 @@ func buildRequestListSQL(baseCondition string, baseArgs []any, filter ListFilter
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // adminViewSQL holds each admin view's condition; CountAdminViews counts
-// with the same ones.
+// with the same ones. Done is every request no admin has to look at again: one
+// that reached the library, or one closed by a decline, a cancellation, or an
+// admin's delete (removed).
 var adminViewSQL = map[AdminView]string{
 	AdminViewNeedsApproval: "(outcome = 'active' AND status = 'pending')",
 	AdminViewInProgress:    "(outcome = 'active' AND status IN ('approved', 'queued', 'downloading'))",
 	AdminViewFailed:        "(outcome = 'failed')",
-	AdminViewDone:          "((outcome = 'active' AND status = 'completed') OR outcome IN ('declined', 'cancelled'))",
+	AdminViewDone:          "((outcome = 'active' AND status = 'completed') OR outcome IN ('declined', 'cancelled', 'removed'))",
 }
 
 func adminViewCondition(view AdminView) string {

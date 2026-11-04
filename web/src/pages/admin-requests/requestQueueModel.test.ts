@@ -42,10 +42,15 @@ describe("requestQueueActions", () => {
     ["approved and sent", { status: "approved", outcome: "active", targets: sent }, ["delete"]],
     ["queued", { status: "queued", outcome: "active", targets: sent }, ["delete"]],
     // Admin cancel accepts only an active request, so a failed one offers Retry alone.
-    ["failed", { status: "approved", outcome: "failed", targets: [] }, ["retry", "cancel", "delete"]],
+    [
+      "failed",
+      { status: "approved", outcome: "failed", targets: [] },
+      ["retry", "cancel", "delete"],
+    ],
     ["completed", { status: "completed", outcome: "active" }, ["delete"]],
     ["declined", { status: "pending", outcome: "declined" }, ["delete"]],
-    ["removed", { status: "approved", outcome: "removed" }, ["delete"]],
+    // Already removed: closed here and gone from its server, so nothing to do.
+    ["removed", { status: "approved", outcome: "removed" }, []],
   ])("offers a %s request only what the server allows", (_label, request, actions) => {
     expect(requestQueueActions(request)).toEqual(actions);
   });
