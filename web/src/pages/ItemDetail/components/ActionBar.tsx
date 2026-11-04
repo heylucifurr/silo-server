@@ -218,7 +218,17 @@ function SplitPrimaryAction({
             className={`size-[18px] ${action.pending ? "animate-spin" : ""}`}
           />
         )}
-        {action.label}
+        {/* The reserved label sits in the same grid cell as the visible one, so
+            the cell is as wide as the wider of the two and the pill keeps its
+            width as the label changes. */}
+        <span className="grid place-items-center">
+          <span className="col-start-1 row-start-1">{action.label}</span>
+          {action.reserveWidthFor ? (
+            <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+              {action.reserveWidthFor}
+            </span>
+          ) : null}
+        </span>
       </Button>
       {/* The 4K segment wears the brand red rather than the theme's primary, so
           it reads as its own choice next to the request itself. */}
@@ -256,6 +266,14 @@ export interface ActionBarWatchTogether {
  */
 export interface ActionBarPrimaryAction {
   label: string;
+  /**
+   * A label whose width the pill always keeps, so the row beside it does not
+   * move as a shorter label replaces it (Request movie → Requested). The
+   * visible label is centred in the reserved space. Used by the split request
+   * pill, whose width would otherwise jump by a label's worth on every state
+   * change.
+   */
+  reserveWidthFor?: string;
   icon?: LucideIcon;
   onClick?: () => void;
   /** Shows a spinner and blocks the action while it is in flight. */

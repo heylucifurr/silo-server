@@ -134,10 +134,16 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
           }
       : undefined;
 
+  // The label the request pill shows when it can be used. It is also the width
+  // the split pill keeps in every other state, so requesting a title does not
+  // resize the pill and shift the row beside it.
+  const requestLabel = item.media_type === "series" ? "Request series" : "Request movie";
+
   let primaryAction: ActionBarPrimaryAction;
   if (item.request.requestable) {
     primaryAction = {
-      label: item.media_type === "series" ? "Request series" : "Request movie",
+      label: requestLabel,
+      reserveWidthFor: requestLabel,
       icon: Plus,
       pending: createRequest.isPending,
       onClick: seasonPicker
@@ -153,6 +159,7 @@ export default function RequestActionBar({ item, libraryHref }: RequestActionBar
     primaryAction = {
       // The viewer's side of a pending request: they asked, nobody has answered.
       label: state === "pending" ? "Requested" : formatRequestDisplayState(state),
+      reserveWidthFor: requestLabel,
       icon: STATE_ICONS[state],
       disabled: true,
       // An admin can still add the missing 4K copy to an open request.

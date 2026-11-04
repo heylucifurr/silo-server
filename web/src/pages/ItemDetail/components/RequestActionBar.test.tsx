@@ -268,4 +268,20 @@ describe("RequestActionBar 4K choice", () => {
     expect(segment).toBeEnabled();
     expect(segment.querySelector(".lucide-download")).toBeTruthy();
   });
+
+  it("keeps the pill the same width across states so the row does not move", () => {
+    with4K();
+    renderBar({ ...heat, request: { requestable: true } });
+    // The actionable pill reserves its own label; a settled one reserves the
+    // same, so the pill does not resize and nothing beside it shifts.
+    const reserved = document.querySelector('[aria-hidden="true"].invisible');
+    expect(reserved?.textContent).toBe("Request movie");
+  });
+
+  it("reserves the series label on a series", () => {
+    with4K();
+    renderBar({ ...heat, media_type: "series", request: { requestable: true } });
+    const reserved = document.querySelector('[aria-hidden="true"].invisible');
+    expect(reserved?.textContent).toBe("Request series");
+  });
 });
