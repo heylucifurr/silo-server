@@ -14,20 +14,22 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 
 /**
- * Confirms deleting a request, and asks whether the download server loses it
- * too: the request is always closed in Silo (outcome `removed`), and the title
- * is removed from Radarr or Sonarr unless the admin asks for Silo only. There is
- * one download-server choice, not two: Seerr's remove call deletes the files
- * with the title and offers no switch for keeping them.
+ * Confirms deleting one request or a selected batch, and asks whether the
+ * download server loses them too: every request is closed in Silo (outcome
+ * `removed`), and each title is removed from Radarr or Sonarr unless the admin
+ * asks for Silo only. There is one download-server choice, not two: Seerr's
+ * remove call deletes the files with the title and offers no switch for keeping
+ * them.
  */
 export function DeleteRequestDialog({
-  request,
+  requests,
   open,
   onOpenChange,
   onConfirm,
   isPending,
 }: {
-  request: MediaRequest | null;
+  /** The requests being deleted; empty while the dialog is closed. */
+  requests: readonly MediaRequest[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (options: AdminRequestDeleteOptions) => void;
@@ -35,11 +37,11 @@ export function DeleteRequestDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      {/* Keyed by the request and the open state, so every open starts from the
-          defaults whatever the last one chose. */}
+      {/* Keyed by the selection and the open state, so every open starts from
+          the defaults whatever the last one chose. */}
       <DeleteRequestContent
-        key={`${request?.id ?? "none"}:${open ? "open" : "closed"}`}
-        request={request}
+        key={`${requests.map((request) => request.id).join(",")}:${open ? "open" : "closed"}`}
+        requests={requests}
         onConfirm={onConfirm}
         isPending={isPending}
       />
@@ -48,29 +50,42 @@ export function DeleteRequestDialog({
 }
 
 function DeleteRequestContent({
-  request,
+  requests,
   onConfirm,
   isPending,
 }: {
-  request: MediaRequest | null;
+  requests: readonly MediaRequest[];
   onConfirm: (options: AdminRequestDeleteOptions) => void;
   isPending?: boolean;
 }) {
   const id = useId();
   const [removeMedia, setRemoveMedia] = useState(true);
+  const count = requests.length;
+  const one = count === 1;
   // Seerr removes a whole series from Sonarr, not the seasons a request named,
   // so the copy has to say so: a season request would otherwise read as though
   // it only touched those seasons.
-  const isSeries = request?.media_type === "series";
+  const isSeries = requests.some((request) => request.media_type === "series");
+  const serverNote = isSeries
+    ? one
+      ? "Removes the whole series from Sonarr and deletes its files, not just the seasons this request asked for."
+      : "Removes each title from Radarr or Sonarr and deletes its files; a series goes whole, not just the seasons a request asked for."
+    : one
+      ? "Removes the movie from Radarr and deletes its files."
+      : "Removes each movie from Radarr and deletes its files.";
 
   return (
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogTitle>Delete this request?</AlertDialogTitle>
+        <AlertDialogTitle>
+          {one ? "Delete this request?" : `Delete ${count} requests?`}
+        </AlertDialogTitle>
         <AlertDialogDescription>
-          {request
-            ? `"${request.title}" is closed in Silo and marked removed. It stops showing as an open request.`
-            : ""}
+          {count === 0
+            ? ""
+            : one
+              ? `"${requests[0]!.title}" is closed in Silo and marked removed. It stops showing as an open request.`
+              : `${count} requests are closed in Silo and marked removed. They stop showing as open requests.`}
         </AlertDialogDescription>
       </AlertDialogHeader>
       <div className="grid gap-3 text-sm">
@@ -81,13 +96,13 @@ function DeleteRequestContent({
             onCheckedChange={(checked) => setRemoveMedia(checked === true)}
           />
           <span>
-            Also remove it from the download server
+            {one
+              ? "Also remove it from the download server"
+              : "Also remove them from the download server"}
             <span className="text-muted-foreground block text-xs">
-              {isSeries
-                ? "Removes the whole series from Sonarr and deletes its files, not just the seasons this request asked for."
-                : "Removes the movie from Radarr and deletes its files."}{" "}
-              Leave this off when the server cannot be reached: Silo closes its own record and the
-              server keeps the {isSeries ? "series" : "movie"}.
+              {serverNote} Leave this off when the server cannot be reached: Silo closes
+              {one ? " its own record" : " its own records"} and the server keeps
+              {one ? " the title" : " them"}.
             </span>
           </span>
         </label>
@@ -95,7 +110,7 @@ function DeleteRequestContent({
       <AlertDialogFooter className="items-center sm:justify-between">
         <p className="text-muted-foreground text-sm">This can&apos;t be undone.</p>
         <div className="flex gap-2">
-          <AlertDialogCancel>Keep request</AlertDialogCancel>
+          <AlertDialogCancel>{one ? "Keep request" : "Keep requests"}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             disabled={isPending}
@@ -109,10 +124,12 @@ function DeleteRequestContent({
             {isPending ? (
               <>
                 <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Delete request
+                {one ? "Delete request" : `Delete ${count} requests`}
               </>
-            ) : (
+            ) : one ? (
               "Delete request"
+            ) : (
+              `Delete ${count} requests`
             )}
           </AlertDialogAction>
         </div>

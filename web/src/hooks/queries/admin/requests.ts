@@ -268,7 +268,7 @@ export function useAdminDeleteRequest() {
   });
 }
 
-export type BulkRequestAction = "approve" | "decline";
+export type BulkRequestAction = "approve" | "decline" | "delete";
 
 /** Requests a bulk action sends at once; the rest wait for a free slot. */
 export const BULK_REQUEST_CONCURRENCY = 4;
@@ -300,10 +300,10 @@ async function forEachWithConcurrency<T>(
 }
 
 /**
- * Approves or declines several requests through the per-request endpoints, a
- * few at a time. One refusal does not stop the rest: `progress` counts every
- * answer and keeps each failure with its reason. The queue and counts are
- * read again once, when the last answer is in.
+ * Approves, declines or deletes several requests through the per-request
+ * endpoints, a few at a time. One refusal does not stop the rest: `progress`
+ * counts every answer and keeps each failure with its reason. The queue and
+ * counts are read again once, when the last answer is in.
  */
 export function useBulkRequestAction() {
   const queryClient = useQueryClient();
@@ -314,10 +314,13 @@ export function useBulkRequestAction() {
       action,
       requests,
       reason,
+      deleteOptions,
     }: {
       action: BulkRequestAction;
       requests: readonly Pick<MediaRequest, "id" | "title">[];
       reason?: string;
+      /** Delete only: what to remove beyond the Silo record. */
+      deleteOptions?: AdminRequestDeleteOptions;
     }) => {
       const failures: BulkRequestFailure[] = [];
       let done = 0;
@@ -325,7 +328,8 @@ export function useBulkRequestAction() {
       await forEachWithConcurrency(requests, BULK_REQUEST_CONCURRENCY, async (request) => {
         try {
           if (action === "approve") await approveAdminRequestV2(request.id);
-          else await declineAdminRequestV2(request.id, reason);
+          else if (action === "decline") await declineAdminRequestV2(request.id, reason);
+          else await deleteAdminRequestV2(request.id, deleteOptions);
         } catch (err) {
           failures.push({
             id: request.id,
@@ -339,7 +343,8 @@ export function useBulkRequestAction() {
       return { action, total: requests.length, failures };
     },
     onSuccess: ({ action, total, failures }) => {
-      const verb = action === "approve" ? "approved" : "declined";
+      const verb =
+        action === "approve" ? "approved" : action === "decline" ? "declined" : "deleted";
       const succeeded = total - failures.length;
       if (failures.length === 0) {
         toast.success(`${succeeded} ${succeeded === 1 ? "request" : "requests"} ${verb}`);

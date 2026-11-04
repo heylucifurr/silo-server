@@ -122,7 +122,11 @@ export function RequestQueue() {
     : null;
   if (opened !== null && openRequest === null) setOpened(null);
   const [prompt, setPrompt] = useState<ReasonPrompt | null>(null);
-  const [deletePrompt, setDeletePrompt] = useState<MediaRequest | null>(null);
+  const [deletePrompt, setDeletePrompt] = useState<{
+    requests: MediaRequest[];
+    /** Keeps the rows that failed a bulk delete selected, to try again. */
+    onDone?: BulkDone;
+  } | null>(null);
   const [busy, setBusy] = useState<ReadonlyMap<string, RequestQueueAction>>(() => new Map());
   const approve = useApproveMediaRequest();
   const decline = useDeclineMediaRequest();
@@ -176,7 +180,7 @@ export function RequestQueue() {
         case "cancel":
           return setPrompt({ action, request });
         case "delete":
-          return setDeletePrompt(request);
+          return setDeletePrompt({ requests: [request] });
       }
     },
   };
@@ -294,6 +298,7 @@ export function RequestQueue() {
                 onBulkDecline={(requests, onDone) =>
                   setPrompt({ action: "bulk-decline", requests, onDone })
                 }
+                onBulkDelete={(requests, onDone) => setDeletePrompt({ requests, onDone })}
               />
             </TabsContent>
           ))
@@ -320,19 +325,36 @@ export function RequestQueue() {
         }}
       />
       <DeleteRequestDialog
-        request={deletePrompt}
+        requests={deletePrompt?.requests ?? []}
         open={deletePrompt !== null}
-        isPending={deletePrompt !== null && busy.get(deletePrompt.id) === "delete"}
+        isPending={
+          deletePrompt !== null &&
+          (deletePrompt.requests.length === 1
+            ? busy.get(deletePrompt.requests[0]!.id) === "delete"
+            : bulk.isRunning)
+        }
         onOpenChange={(open) => {
           if (!open) setDeletePrompt(null);
         }}
         onConfirm={(options) => {
-          const request = deletePrompt;
-          if (!request) return;
-          void track(request, "delete", () =>
-            remove.mutateAsync({ id: request.id, options }),
-          ).finally(() =>
-            setDeletePrompt((current) => (current?.id === request.id ? null : current)),
+          const prompt = deletePrompt;
+          if (!prompt) return;
+          // One request runs through the row's own mutation, so its button
+          // spins; a batch runs through the bulk action, which reports its
+          // progress and keeps whatever failed selected.
+          if (prompt.requests.length === 1) {
+            const request = prompt.requests[0]!;
+            void track(request, "delete", () =>
+              remove.mutateAsync({ id: request.id, options }),
+            ).finally(() => setDeletePrompt(null));
+            return;
+          }
+          bulk.run(
+            { action: "delete", requests: prompt.requests, deleteOptions: options },
+            {
+              onSuccess: ({ failures }) => prompt.onDone?.(failures.map((failure) => failure.id)),
+              onSettled: () => setDeletePrompt(null),
+            },
           );
         }}
       />
@@ -414,6 +436,7 @@ function QueueList({
   onOpen,
   onFilterUser,
   onBulkDecline,
+  onBulkDelete,
 }: {
   view: RequestQueueView;
   emptyText: string;
@@ -425,6 +448,7 @@ function QueueList({
   onOpen: (request: MediaRequest) => void;
   onFilterUser: (id: number) => void;
   onBulkDecline: (requests: MediaRequest[], onDone: BulkDone) => void;
+  onBulkDelete: (requests: MediaRequest[], onDone: BulkDone) => void;
 }) {
   const queue = useAdminRequestQueue(filter);
   const rows = useMemo(() => queue.data?.pages.flatMap((page) => page.items) ?? [], [queue.data]);
@@ -479,6 +503,7 @@ function QueueList({
           onSelectAll={(checked) => setSelected(new Set(checked ? rows.map((row) => row.id) : []))}
           onApprove={approveSelected}
           onDecline={() => onBulkDecline(selectedRows, keepFailed)}
+          onDelete={() => onBulkDelete(selectedRows, keepFailed)}
         />
       ) : null}
 
@@ -552,6 +577,7 @@ function BulkBar({
   onSelectAll,
   onApprove,
   onDecline,
+  onDelete,
 }: {
   rows: MediaRequest[];
   selectedRows: MediaRequest[];
@@ -560,6 +586,7 @@ function BulkBar({
   onSelectAll: (checked: boolean) => void;
   onApprove: () => void;
   onDecline: () => void;
+  onDelete: () => void;
 }) {
   const count = selectedRows.length;
   const someSelected = count > 0 && !allSelected;
@@ -589,6 +616,15 @@ function BulkBar({
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={bulk.isRunning}
+              onClick={onDelete}
+            >
+              Delete {count}
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               disabled={bulk.isRunning}
               onClick={() => onSelectAll(false)}
@@ -615,8 +651,8 @@ function BulkProgress({
   onDismiss: () => void;
 }) {
   const { action, total, done, failures } = progress;
-  const verb = action === "approve" ? "Approving" : "Declining";
-  const past = action === "approve" ? "approved" : "declined";
+  const verb = action === "approve" ? "Approving" : action === "decline" ? "Declining" : "Deleting";
+  const past = action === "approve" ? "approved" : action === "decline" ? "declined" : "deleted";
   if (running) {
     return (
       <div role="status" className="border-border bg-card space-y-2 rounded-lg border p-3 text-sm">

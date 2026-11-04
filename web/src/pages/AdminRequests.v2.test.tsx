@@ -379,6 +379,40 @@ describe("request administration", () => {
     expect(screen.getByRole("checkbox", { name: "Select Title 1" })).not.toBeChecked();
   });
 
+  it("deletes the selected requests once the download-server choice is confirmed", async () => {
+    const rows = [request("d1", "Title 1"), request("d2", "Title 2")];
+    serve({
+      ...queue({ needs_approval: rows }, { ...COUNTS, needs_approval: 2 }),
+      "POST /api/v2/admin/requests/{id}/delete": ({ path }) =>
+        request(path!.id!, path!.id!, { outcome: "removed", state: "removed" }),
+    });
+    mount("/admin/requests?view=needs_approval");
+    await rowOf("Title 2");
+
+    fireEvent.click(screen.getByLabelText("Select all 2 shown"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
+
+    // The batch is confirmed before anything is deleted.
+    expect(screen.getByText("Delete 2 requests?")).toBeInTheDocument();
+    expect(calls("POST /api/v2/admin/requests/{id}/delete")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 requests" }));
+
+    await waitFor(() => expect(calls("POST /api/v2/admin/requests/{id}/delete")).toHaveLength(2));
+    expect(
+      calls("POST /api/v2/admin/requests/{id}/delete")
+        .map((call) => call.path?.id)
+        .sort(),
+    ).toEqual(["d1", "d2"]);
+    // Each delete asks for the download server to lose the title too.
+    expect(
+      calls("POST /api/v2/admin/requests/{id}/delete").every(
+        (call) => call.body?.remove_media === true,
+      ),
+    ).toBe(true);
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("2 requests deleted"));
+  });
+
   it("shows the refetched request in the open dialog after another admin acted first", async () => {
     const LATER = "2026-09-02T00:00:00Z";
     let sent = false;

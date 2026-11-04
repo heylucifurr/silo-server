@@ -24,7 +24,7 @@ const request: MediaRequest = {
 
 function openDialog(onConfirm: (options: AdminRequestDeleteOptions) => void) {
   render(
-    <DeleteRequestDialog request={request} open onOpenChange={() => {}} onConfirm={onConfirm} />,
+    <DeleteRequestDialog requests={[request]} open onOpenChange={() => {}} onConfirm={onConfirm} />,
   );
 }
 
@@ -55,7 +55,7 @@ describe("DeleteRequestDialog", () => {
   it("says a series goes from Sonarr whole, not just its requested seasons", () => {
     render(
       <DeleteRequestDialog
-        request={{ ...request, media_type: "series" }}
+        requests={[{ ...request, media_type: "series" }]}
         open
         onOpenChange={() => {}}
         onConfirm={vi.fn()}
@@ -64,6 +64,23 @@ describe("DeleteRequestDialog", () => {
 
     expect(screen.getByText(/Removes the whole series from Sonarr/)).toBeInTheDocument();
     expect(screen.queryByText(/Removes the movie from Radarr/)).toBeNull();
+  });
+
+  it("deletes a batch, naming the count", () => {
+    const onConfirm = vi.fn();
+    render(
+      <DeleteRequestDialog
+        requests={[request, { ...request, id: "r2", title: "Prey" }]}
+        open
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    expect(screen.getByText("Delete 2 requests?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 requests" }));
+
+    expect(onConfirm).toHaveBeenCalledWith({ removeMedia: true, siloOnly: false });
   });
 
   it("closes the Silo record only when the download-server box is cleared", () => {
