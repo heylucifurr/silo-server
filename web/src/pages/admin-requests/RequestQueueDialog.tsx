@@ -25,6 +25,7 @@ import {
 import { useAdminPluginInstallations } from "@/hooks/queries/admin/plugins";
 import { useAdminUsers } from "@/hooks/queries/admin/users";
 import {
+  useAdminRequestCapabilities,
   useAdminRequestEvents,
   useAdminRequestRoutePreview,
   useRequestIntegrations,
@@ -40,9 +41,18 @@ import {
 } from "@/lib/mediaRequests";
 import { RoutePreviewResult } from "@/pages/admin-settings/RequestRoutePreview";
 import { requestRouterInstallations } from "@/pages/admin-settings/requestServerModel";
-import { RequestActionButtons, type RequestQueueActionHandlers } from "./RequestActionButtons";
+import {
+  RequestActionButton,
+  RequestActionButtons,
+  type RequestQueueActionHandlers,
+} from "./RequestActionButtons";
 import { RequestPoster, RequestStateSummary, TargetStatusBadge } from "./queueParts";
-import { formatRequestEventType, requestQueueView, targetServerName } from "./requestQueueModel";
+import {
+  canRefreshRequestFromSeerr,
+  formatRequestEventType,
+  requestQueueView,
+  targetServerName,
+} from "./requestQueueModel";
 
 /** Everything about one request: its servers, where it would go, and its history. */
 export function RequestQueueDialog({
@@ -86,6 +96,8 @@ function RequestDetail({
 }) {
   const backdrop = tmdbImageURL(request.backdrop_path, "w780");
   const view = requestQueueView(request);
+  const capabilities = useAdminRequestCapabilities();
+  const refreshable = canRefreshRequestFromSeerr(request, capabilities.data?.seerr_sync);
   const requester =
     requesterName ??
     (request.requested_by_user_id ? `User ${request.requested_by_user_id}` : "Unknown account");
@@ -209,7 +221,12 @@ function RequestDetail({
       </div>
 
       <DialogFooter className="border-border shrink-0 flex-row flex-wrap items-center justify-between gap-2 border-t px-6 py-3 sm:justify-between">
-        <RequestActionButtons request={request} handlers={handlers} />
+        <div className="flex flex-wrap items-center gap-2">
+          <RequestActionButtons request={request} handlers={handlers} />
+          {refreshable ? (
+            <RequestActionButton action="refresh" request={request} handlers={handlers} />
+          ) : null}
+        </div>
         <Button asChild variant="ghost" size="sm">
           <Link to={requestDetailHref(request.media_type, request.tmdb_id)}>
             <ExternalLink aria-hidden="true" />

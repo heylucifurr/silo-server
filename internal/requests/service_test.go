@@ -1228,6 +1228,10 @@ func testViewer(userID int) Viewer {
 type fakeStore struct {
 	mu            sync.Mutex
 	adminFilters  []ListFilter
+	// adminList seeds ListAdmin's page output, newest first. Tests that page
+	// through the admin list (the first-deploy sync sweep) fill it; leaving it
+	// empty keeps ListAdmin returning nothing as before.
+	adminList     []*Request
 	viewCounts    AdminViewCounts
 	events        map[string][]RequestEvent
 	settings      Settings
@@ -1579,7 +1583,30 @@ func (f *fakeStore) ListAdmin(_ context.Context, filter ListFilter) ([]*Request,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.adminFilters = append(f.adminFilters, filter)
-	return nil, nil
+	if len(f.adminList) == 0 {
+		return nil, nil
+	}
+	// Mirror the repository: newest first, strictly before the Before cursor,
+	// at most Limit rows. adminList is seeded newest-first by the tests.
+	limit := filter.Limit
+	if limit <= 0 || limit > len(f.adminList) {
+		limit = len(f.adminList)
+	}
+	out := make([]*Request, 0, limit)
+	for _, req := range f.adminList {
+		if filter.Before != nil {
+			after := req.CreatedAt.After(filter.Before.CreatedAt)
+			sameKey := req.CreatedAt.Equal(filter.Before.CreatedAt) && req.ID >= filter.Before.ID
+			if after || sameKey {
+				continue
+			}
+		}
+		out = append(out, req)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeStore) GetGroupLimit(_ context.Context, groupID int64) (*GroupLimit, error) {

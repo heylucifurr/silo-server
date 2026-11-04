@@ -18,6 +18,10 @@ const adminActionDecline = "decline"
 const adminActionCancel = "cancel"
 const adminActionRetry = "retry"
 const adminActionDelete = "delete"
+
+// adminActionRefresh re-reads one request's status from Seerr on demand, the
+// per-request half of the scheduled "Sync requests" task.
+const adminActionRefresh = "refresh"
 const adminRequestSort = "-created_at"
 const opGetAdminRequestCapabilities = "getAdminRequestCapabilities"
 const opAdminApproveRequest = "adminApproveRequest"
@@ -179,6 +183,16 @@ type AdminRequestActionInput struct {
 type adminRequestDeleter interface {
 	DeleteRequest(context.Context, mediarequests.Viewer, string, mediarequests.DeleteOptions) (*mediarequests.Request, error)
 }
+
+// adminRequestSeerrSyncer re-reads one request's status from Seerr, the
+// per-request half of the scheduled "Sync requests" task. It answers
+// mediarequests.ErrIntegrationUnreachable when no Seerr connection is
+// configured or Seerr cannot be reached, so the action reports a dependency
+// problem instead of pretending the request is unchanged.
+type adminRequestSeerrSyncer interface {
+	SyncSeerrRequest(ctx context.Context, id string) (*mediarequests.Request, error)
+}
+
 type AdminRequestCapabilitiesOutput struct {
 	Status       int
 	ETag         string `header:"ETag"`
@@ -194,6 +208,7 @@ type AdminRequestCapabilitiesOutputBody struct {
 	RoutingSeriesStatus  bool `json:"routing_series_status" doc:"Whether series routing rules take series_statuses and exclude_series_statuses conditions. Send them only when true. With several API servers, add such conditions only once every server reports true: a server without them ignores them and routes as if the rule had none"`
 	DiscoverLayout       bool `json:"discover_layout" doc:"Whether the Requests Discover page's layout can be edited under /admin/request-discover"`
 	DiscoverListOrder    bool `json:"discover_list_order" doc:"Whether an mdblist Discover row takes list.order. Send it only when true"`
+	SeerrSync            bool `json:"seerr_sync" doc:"Whether a request's status can be re-read from Seerr on demand with POST /admin/requests/{id}/refresh. A server with no Seerr connection still reports true here only while the service supports the action; the action itself answers a dependency-unavailable problem when no Seerr connection is configured"`
 }
 
 func adminRequestViewer(ctx context.Context) mediarequests.Viewer {
@@ -241,13 +256,21 @@ func registerAdminRequests(reg *Registry) {
 		out.Body.RoutingSeriesStatus = out.Body.Routing
 		_, out.Body.DiscoverLayout = reg.deps.AdminRequests.(adminRequestDiscover)
 		out.Body.DiscoverListOrder = out.Body.DiscoverLayout
+		_, out.Body.SeerrSync = reg.deps.AdminRequests.(adminRequestSeerrSyncer)
 		return out, nil
 	})
 	Register(reg, op(http.MethodGet, "/admin/requests", opListAdminRequests, false), func(ctx context.Context, in *AdminMediaRequestListInput) (*MediaRequestCollectionOutput, error) {
 		return reg.listAdminRequests(ctx, cursors, in)
 	})
-	for _, action := range []string{adminActionApprove, adminActionDecline, adminActionCancel, adminActionRetry, adminActionDelete} {
-		Register(reg, op(http.MethodPost, "/admin/requests/{id}/"+action, "admin"+strings.ToUpper(action[:1])+action[1:]+"Request", false), func(ctx context.Context, in *AdminRequestActionInput) (*MediaRequestOutput, error) {
+	for _, action := range []string{adminActionApprove, adminActionDecline, adminActionCancel, adminActionRetry, adminActionDelete, adminActionRefresh} {
+		operation := op(http.MethodPost, "/admin/requests/{id}/"+action, "admin"+strings.ToUpper(action[:1])+action[1:]+"Request", false)
+		if action == adminActionRefresh {
+			// Refresh only reads Seerr and re-applies what it reports, so a
+			// replay converges on the same request state; every other action
+			// here is a decision a client must not repeat on its own.
+			operation.RetrySafety = RetrySafetyNaturalIdempotent
+		}
+		Register(reg, operation, func(ctx context.Context, in *AdminRequestActionInput) (*MediaRequestOutput, error) {
 			s, p := reg.adminRequestService()
 			if p != nil {
 				return nil, p
@@ -278,6 +301,12 @@ func registerAdminRequests(reg *Registry) {
 					SiloOnly:    in.Body.SiloOnly,
 					Qualities:   requestQualitiesFromStrings(in.Body.Qualities),
 				})
+			case adminActionRefresh:
+				syncer, ok := s.(adminRequestSeerrSyncer)
+				if !ok {
+					return nil, unavailable("Seerr request sync")
+				}
+				r, err = syncer.SyncSeerrRequest(ctx, string(in.ID))
 			}
 			if err != nil {
 				return nil, requestProblem(err)

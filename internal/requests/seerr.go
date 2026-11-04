@@ -37,13 +37,64 @@ func NewSeerrClient(httpClient *http.Client) *SeerrClient {
 }
 
 // seerrRequest is one MediaRequest as Seerr reports it. Only the fields the
-// host reads are decoded.
+// host reads are decoded. Status is Seerr's MediaRequestStatus (1 pending,
+// 2 approved, 3 declined); Media.Status and Media.Status4K are its MediaStatus
+// for the HD and 4K variants (1 unknown, 2 pending, 3 processing,
+// 4 partially available, 5 available).
 type seerrRequest struct {
-	ID    int  `json:"id"`
-	Is4K  bool `json:"is4k"`
-	Media *struct {
-		ID int `json:"id"`
+	ID     int  `json:"id"`
+	Is4K   bool `json:"is4k"`
+	Status int  `json:"status"`
+	Media  *struct {
+		ID       int `json:"id"`
+		Status   int `json:"status"`
+		Status4K int `json:"status4k"`
 	} `json:"media"`
+}
+
+// Seerr's MediaRequestStatus and MediaStatus values the sync maps.
+const (
+	seerrRequestDeclined = 3
+	seerrMediaUnknown    = 1
+	seerrMediaPending    = 2
+	seerrMediaProcessing = 3
+	seerrMediaPartial    = 4
+	seerrMediaAvailable  = 5
+)
+
+// SeerrRequestStatus is what the sync needs from one Seerr request. Found is
+// false when Seerr no longer has the request (404); the sync then retires the
+// request as Removed. Declined is Seerr's MediaRequestStatus "declined".
+// MediaStatus and MediaStatus4K are Seerr's MediaStatus for the HD and 4K
+// variants, read from the one shared media row.
+type SeerrRequestStatus struct {
+	Found         bool
+	Declined      bool
+	MediaStatus   int
+	MediaStatus4K int
+}
+
+// RequestStatus reads a request's status from Seerr. A nil status means Seerr
+// answered 404: the request no longer exists. An error means the lookup failed
+// (offline, auth, timeout); the caller must keep the request as it is rather
+// than read a failure as a deletion.
+func (c *SeerrClient) RequestStatus(ctx context.Context, in Integration, externalID string) (*SeerrRequestStatus, error) {
+	req, err := c.getRequest(ctx, in, externalID)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, nil
+	}
+	status := &SeerrRequestStatus{
+		Found:    true,
+		Declined: req.Status == seerrRequestDeclined,
+	}
+	if req.Media != nil {
+		status.MediaStatus = req.Media.Status
+		status.MediaStatus4K = req.Media.Status4K
+	}
+	return status, nil
 }
 
 // TargetExists reports whether the target's request still exists in Seerr. A

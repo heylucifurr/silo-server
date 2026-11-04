@@ -46,7 +46,12 @@ export function requestQueueView(
   return "in_progress";
 }
 
-export type RequestQueueAction = "approve" | "decline" | "retry" | "cancel" | "delete";
+/**
+ * What an admin can do with one request. Refresh is offered in a request's
+ * detail dialog only: it re-reads the status from Seerr, which is worth doing
+ * on the request under an admin's eye rather than on every row of the queue.
+ */
+export type RequestQueueAction = "approve" | "decline" | "retry" | "cancel" | "delete" | "refresh";
 
 /**
  * What an admin can do with a request, by its view and the server's rules:
@@ -74,6 +79,27 @@ export function requestQueueActions(
   }
 }
 
+/**
+ * Whether "Refresh from Seerr" can do anything for a request: the server has to
+ * support it, the request has to have a target that went somewhere with an id
+ * Seerr knows, and it must be a request no person has closed, since the sync
+ * leaves those as they are.
+ */
+export function canRefreshRequestFromSeerr(
+  request: Pick<MediaRequest, "outcome" | "targets">,
+  seerrSync: boolean | undefined,
+): boolean {
+  if (!seerrSync) return false;
+  if (
+    request.outcome === "declined" ||
+    request.outcome === "cancelled" ||
+    request.outcome === "removed"
+  ) {
+    return false;
+  }
+  return (request.targets ?? []).some((target) => Boolean(target.external_id));
+}
+
 const EVENT_LABELS: Record<string, string> = {
   created: "Requested",
   approved: "Approved",
@@ -90,6 +116,8 @@ const EVENT_LABELS: Record<string, string> = {
   outcome_removed: "Removed",
   // The reconcile pass retires a request Seerr no longer has.
   removed_in_seerr: "Removed in the download server",
+  // The status sync moved a target to match what Seerr reports.
+  synced_from_seerr: "Status synced",
   retried: "Retried",
   submit_deferred: "Couldn't send yet",
 };

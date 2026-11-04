@@ -503,6 +503,75 @@ request whose last target is gone closes as `removed` with an
 progress forever. A lookup that fails leaves the request exactly as it is: an
 unreachable service must not delete anything.
 
+## Status sync
+
+`sync_seerr_requests` ("Sync requests") reads each request's status back from
+Seerr, so a request declined or deleted there closes in Silo and a download
+Seerr has finished completes without waiting for the reconcile pass. It is an
+ordinary scheduled task: every 15 minutes by default, with a Run now button, its
+history and its last run on the Scheduled Tasks page, and an editable interval.
+The admin queue's **Sync now** button runs the same task.
+
+A run takes the reconcile candidates — active requests in `approved`, `queued` or
+`downloading`, least recently reconciled first — and for each one reads the
+status of the Seerr request its targets came from (`GET /api/v1/request/{id}`).
+Targets that share a Seerr request are read once: Seerr keeps one request per
+title, with its HD and 4K variants on one media row. Lookups run one at a time,
+in the order the candidates came in, so a run never fans out against Seerr; a
+run's `limit` bounds how many requests it examines. Seerr's answer maps like
+this:
+
+| Seerr | Silo |
+| --- | --- |
+| `MediaRequestStatus` declined (3) | the request closes `declined` |
+| the request is gone (404) | its targets are retired, and the request closes `removed` when none are left |
+| `MediaStatus` available (5) | the target completes |
+| partially available (4) | the target stays in progress: one still approved or queued moves to `downloading`, a downloading one is left alone |
+| processing (3) | the target moves to `downloading` |
+| pending (2), unknown (1) | nothing: the download path owns the queued step |
+
+The variant decides the field: a 4K target reads `media.status4k`, an HD target
+reads `media.status`. The sync only moves a target forward, with one exception:
+Seerr reporting the media available completes a failed target too, since that is
+a fact about the library, while a download Seerr sees under way says nothing
+about why the target failed — retrying stays the admin's call.
+
+Two kinds of request are left as they are. A request a person closed — declined,
+cancelled or removed — keeps what a person decided: the full sweep below walks
+those too, and Seerr's answer for one is usually a 404, since closing the request
+removed it there. A request whose targets all completed is left alone as well,
+since its Seerr request may be gone while the library still has the file.
+
+Retiring and closing are the reconcile pass's own code (`retireSeerrTargets` in
+`internal/requests/reconcile_seerr.go`), so both paths record the same
+`removed_in_seerr` history line and both guard the closing write on a request
+that is still active. A run records what it moved as one `synced_from_seerr`
+event naming each target and its new state ("Synced from Seerr: 1080p is
+available"); a closing write records its own reason, so the sync adds no second
+entry for it. A request Seerr reports unchanged records nothing.
+
+**Seerr offline.** A lookup that fails counts in the run's `errors` and leaves
+that request untouched, so an outage is never read as a deletion; the rest of
+the batch still applies, and the next run retries what failed. A run Seerr
+answered nothing for is recorded as a failed run, so its history shows the
+outage and a first sweep stays owed. A request whose target has no external id,
+or whose integration is not Seerr, costs no lookup.
+
+**The first run sweeps everything.** On a deployment that has never completed a
+run of this task, the first run covers every request the admin list holds, Done
+and Failed included, so entries left stale before this sync existed are
+corrected; later runs cover the in-flight requests only. The task's own history
+is the marker — `TaskManager.HasCompletedRun` — so no separate flag is stored,
+and the run is kicked at startup instead of waiting out the first interval. A
+sweep that failed stays owed and is tried again by the next run.
+
+**On demand.** `POST /api/v2/admin/requests/{id}/refresh` re-reads one request's
+status and answers the request as stored, the per-request half of the task, for
+the detail dialog's "Refresh from Seerr". The admin requests capability's
+`seerr_sync` reports whether the server supports it. A server with no Seerr
+connection answers a dependency-unavailable problem rather than pretending the
+request is unchanged.
+
 ## Download progress
 
 While a target downloads, its router plugin can report how far along it is in

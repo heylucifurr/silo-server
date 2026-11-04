@@ -26,6 +26,7 @@ import {
   cancelAdminRequestV2,
   declineAdminRequestV2,
   deleteAdminRequestV2,
+  refreshAdminRequestV2,
   retryAdminRequestV2,
   loadAdminRequestIntegrationOptionsV2,
   listAdminRequestRoutesV2,
@@ -54,6 +55,7 @@ import type {
   RequestIntegration,
   RequestUserLimit,
 } from "@/api/types";
+import { useRunTask } from "./tasks";
 import { adminKeys, requestKeys } from "../keys";
 
 import {
@@ -225,6 +227,46 @@ export function useRetryMediaRequest() {
       toast.error(err instanceof Error ? err.message : "Failed to retry request");
     },
   });
+}
+
+/**
+ * Re-reads one request's status from Seerr on demand, the per-request half of
+ * the "Sync requests" task. The answer is the request as stored, so a caller
+ * can show it straight away.
+ */
+export function useRefreshAdminRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (id: string) => refreshAdminRequestV2(id),
+    onSuccess: () => {
+      toast.success("Status read back from Seerr");
+    },
+    // A refused refresh still reloads the queue: the request may have moved,
+    // and a Seerr that cannot be reached leaves it as it was.
+    onSettled: () => invalidateRequestSurfaces(queryClient),
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to read the status back from Seerr");
+    },
+  });
+}
+
+/**
+ * Runs the "Sync requests" task now, on the server that answers. The task reads
+ * each in-flight request's status back from Seerr and closes what Seerr has
+ * declined or dropped; the queue is read again once the run has started, since
+ * the run answers only when it has finished.
+ */
+export function useSyncRequests() {
+  const queryClient = useQueryClient();
+  const runTask = useRunTask();
+  return {
+    isRunning: runTask.isPending,
+    run: () =>
+      runTask.mutate("sync_seerr_requests", {
+        onSuccess: () => invalidateRequestSurfaces(queryClient),
+      }),
+  };
 }
 
 /** An admin withdraws a request nothing has been sent for yet, or closes a failed one. */

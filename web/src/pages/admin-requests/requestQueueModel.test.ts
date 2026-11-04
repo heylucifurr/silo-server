@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { MediaRequest } from "@/api/types";
 import {
+  canRefreshRequestFromSeerr,
   defaultRequestQueueView,
   parseRequestQueueUser,
   parseRequestQueueView,
@@ -54,6 +55,41 @@ describe("requestQueueActions", () => {
   ])("offers a %s request only what the server allows", (_label, request, actions) => {
     expect(requestQueueActions(request)).toEqual(actions);
   });
+});
+
+describe("canRefreshRequestFromSeerr", () => {
+  const sentToSeerr = [
+    { quality: "1080p", status: "queued", external_id: "1495" },
+  ] as MediaRequest["targets"];
+  it.each<[string, Fields, boolean, boolean]>([
+    [
+      "in-flight with an id Seerr knows",
+      { status: "queued", outcome: "active", targets: sentToSeerr },
+      true,
+      true,
+    ],
+    // The server reads no status for a target Seerr has no id for.
+    [
+      "with a target Seerr has no id for",
+      { status: "queued", outcome: "active", targets: sent },
+      true,
+      false,
+    ],
+    ["with nothing sent", { status: "approved", outcome: "active", targets: [] }, true, false],
+    ["declined", { status: "pending", outcome: "declined", targets: sentToSeerr }, true, false],
+    ["removed", { status: "approved", outcome: "removed", targets: sentToSeerr }, true, false],
+    [
+      "on a server without the capability",
+      { status: "queued", outcome: "active", targets: sentToSeerr },
+      false,
+      false,
+    ],
+  ])(
+    "offers refresh on a %s request only when the server can act",
+    (_label, request, seerrSync, expected) => {
+      expect(canRefreshRequestFromSeerr(request, seerrSync)).toBe(expected);
+    },
+  );
 });
 
 describe("queue links", () => {

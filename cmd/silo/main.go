@@ -3547,6 +3547,14 @@ func main() {
 		}
 		taskMgr.Register(tasks.NewReconcileRequestsTask(requestReconcileSvc, 100, deps.DB))
 		taskMgr.Register(tasks.NewRefreshRequestDownloadsTask(requestReconcileSvc, 200, deps.DB))
+		// Reads each in-flight request's status back from Seerr, so a request
+		// declined or deleted there closes in Silo and a finished download
+		// completes without waiting for the next reconcile pass. Its first run
+		// sweeps every request instead, Done and Failed included, so entries
+		// left stale before this sync existed are corrected; the task's own
+		// history says whether that pass is still owed.
+		seerrSweepOwed := !taskMgr.HasCompletedRun(appCtx, "sync_seerr_requests")
+		taskMgr.Register(tasks.NewSyncSeerrRequestsTask(requestReconcileSvc, 100, seerrSweepOwed))
 		taskMgr.Register(tasks.NewRefreshRequestDiscoverListsTask(discoverrows.NewRefresher(
 			mediarequests.NewRepository(deps.DB, deps.SecretCipher),
 			discoverrows.NewSnapshotRepository(deps.DB),
@@ -3618,6 +3626,18 @@ func main() {
 
 		taskMgr.Start(appCtx)
 		defer taskMgr.Stop()
+		if seerrSweepOwed {
+			// Run the first sweep now rather than waiting out the interval, so
+			// a deploy corrects stale entries promptly. The run is recorded in
+			// the task's history, and a server starting after it sees that and
+			// leaves the sweep alone.
+			go func() {
+				if err := taskMgr.RunTask(appCtx, "sync_seerr_requests"); err != nil &&
+					!errors.Is(err, taskmanager.ErrTaskAlreadyRunning) {
+					slog.WarnContext(appCtx, "seerr request sweep failed to start", "err", err)
+				}
+			}()
+		}
 		deps.TaskManager = taskMgr
 		slog.Info("task manager started")
 	}

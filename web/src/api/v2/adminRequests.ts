@@ -410,6 +410,16 @@ export function retryAdminRequestV2(id: string) {
     mediaRequestFromV2,
   );
 }
+/**
+ * Re-reads one request's status from Seerr and answers the request as stored.
+ * The server reports a dependency-unavailable problem when no Seerr connection
+ * is configured, or when Seerr cannot be reached.
+ */
+export function refreshAdminRequestV2(id: string) {
+  return v2("POST /api/v2/admin/requests/{id}/refresh", { path: { id }, body: {} }).then(
+    mediaRequestFromV2,
+  );
+}
 export function declineAdminRequestV2(id: string, reason?: string) {
   return v2("POST /api/v2/admin/requests/{id}/decline", { path: { id }, body: { reason } }).then(
     mediaRequestFromV2,

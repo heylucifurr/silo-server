@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
-import { Settings2 } from "lucide-react";
+import { RotateCw, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page/PageHeader";
 import { Button } from "@/components/ui/button";
-import { useAdminRequestCapabilities } from "@/hooks/queries/admin/requests";
+import { useAdminRequestCapabilities, useSyncRequests } from "@/hooks/queries/admin/requests";
+import { cn } from "@/lib/utils";
 import { RequestQueue } from "@/pages/admin-requests/RequestQueue";
 import { EmptyPanel, RowsSkeleton } from "@/pages/admin-requests/queueParts";
 
@@ -46,6 +47,7 @@ function MovedTab({ tab, to }: { tab: string; to: string }) {
 
 function RequestQueuePage() {
   const capabilities = useAdminRequestCapabilities();
+  const sync = useSyncRequests();
   if (capabilities.isLoading) return <RowsSkeleton />;
   if (!capabilities.data?.available) {
     return (
@@ -62,12 +64,27 @@ function RequestQueuePage() {
         title="Requests"
         subtitle="Approve, decline, and follow media requests."
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link to={REQUEST_SETTINGS_HREF}>
-              <Settings2 aria-hidden="true" />
-              Request settings
-            </Link>
-          </Button>
+          <>
+            {capabilities.data.seerr_sync ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={sync.isRunning}
+                title="Read every in-flight request's status back from Seerr now"
+                onClick={sync.run}
+              >
+                <RotateCw aria-hidden="true" className={cn(sync.isRunning && "animate-spin")} />
+                Sync now
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" size="sm">
+              <Link to={REQUEST_SETTINGS_HREF}>
+                <Settings2 aria-hidden="true" />
+                Request settings
+              </Link>
+            </Button>
+          </>
         }
       />
 

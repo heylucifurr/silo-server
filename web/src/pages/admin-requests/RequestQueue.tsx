@@ -21,6 +21,7 @@ import {
   useApproveMediaRequest,
   useBulkRequestAction,
   useDeclineMediaRequest,
+  useRefreshAdminRequest,
   useRefreshRequestQueue,
   useRetryMediaRequest,
 } from "@/hooks/queries/admin/requests";
@@ -133,6 +134,7 @@ export function RequestQueue() {
   const retry = useRetryMediaRequest();
   const cancel = useAdminCancelMediaRequest();
   const remove = useAdminDeleteRequest();
+  const refreshStatus = useRefreshAdminRequest();
   const bulk = useBulkRequestAction();
 
   function updateParams(change: (params: URLSearchParams) => void) {
@@ -176,6 +178,8 @@ export function RequestQueue() {
           return track(request, action, () => approve.mutateAsync(request.id));
         case "retry":
           return track(request, action, () => retry.mutateAsync(request.id));
+        case "refresh":
+          return track(request, action, () => refreshStatus.mutateAsync(request.id));
         case "decline":
         case "cancel":
           return setPrompt({ action, request });

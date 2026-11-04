@@ -1,4 +1,4 @@
-import { Ban, Check, Loader2, RefreshCw, Trash2, X } from "lucide-react";
+import { Ban, Check, Loader2, RefreshCw, RotateCw, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MediaRequest } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,46 @@ const ACTIONS: Record<
     variant: "outline",
     className: "text-destructive hover:text-destructive",
   },
+  // Offered in the request's detail dialog, not on the queue's rows.
+  refresh: { label: "Refresh from Seerr", icon: RotateCw, variant: "outline" },
 };
+
+/**
+ * One action's button: its label, its icon, and the spinner the action shows
+ * while the server answers. Every action on a request waits while one of them
+ * is running.
+ */
+export function RequestActionButton({
+  action,
+  request,
+  handlers,
+}: {
+  action: RequestQueueAction;
+  request: MediaRequest;
+  handlers: RequestQueueActionHandlers;
+}) {
+  const { label, icon: Icon, variant, className } = ACTIONS[action];
+  const running = handlers.busyAction(request.id);
+  const isRunning = action === running;
+  return (
+    <Button
+      size="sm"
+      variant={variant}
+      className={className}
+      disabled={handlers.locked || running !== undefined}
+      aria-label={`${label}: ${request.title}`}
+      aria-busy={isRunning || undefined}
+      onClick={() => handlers.run(action, request)}
+    >
+      {isRunning ? (
+        <Loader2 aria-hidden="true" className="animate-spin" />
+      ) : (
+        <Icon aria-hidden="true" />
+      )}
+      {label}
+    </Button>
+  );
+}
 
 /** The actions a request allows in the queue; none for one that is done. */
 export function RequestActionButtons({
@@ -39,33 +78,11 @@ export function RequestActionButtons({
 }) {
   const actions = requestQueueActions(request);
   if (actions.length === 0) return null;
-  const running = handlers.busyAction(request.id);
-  const disabled = handlers.locked || running !== undefined;
   return (
     <div className="flex flex-wrap gap-2">
-      {actions.map((action) => {
-        const { label, icon: Icon, variant, className } = ACTIONS[action];
-        const isRunning = action === running;
-        return (
-          <Button
-            key={action}
-            size="sm"
-            variant={variant}
-            className={className}
-            disabled={disabled}
-            aria-label={`${label}: ${request.title}`}
-            aria-busy={isRunning || undefined}
-            onClick={() => handlers.run(action, request)}
-          >
-            {isRunning ? (
-              <Loader2 aria-hidden="true" className="animate-spin" />
-            ) : (
-              <Icon aria-hidden="true" />
-            )}
-            {label}
-          </Button>
-        );
-      })}
+      {actions.map((action) => (
+        <RequestActionButton key={action} action={action} request={request} handlers={handlers} />
+      ))}
     </div>
   );
 }

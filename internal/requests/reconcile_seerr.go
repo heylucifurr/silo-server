@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// seerrRemovedMessage is the history line for a request Seerr no longer has.
+// The reconcile pass and the status sync retire targets with it, so both paths
+// read the same in a request's history.
+const seerrRemovedMessage = "Synced from Seerr: the request no longer exists in Seerr"
+
 // retireMissingSeerrTargets removes the request's targets whose Seerr request
 // no longer exists, so a request deleted in Seerr directly is retired in Silo
 // instead of sitting in Processing forever. A completed target is left alone:
@@ -17,7 +22,7 @@ func (s *Service) retireMissingSeerrTargets(ctx context.Context, req Request, ta
 	if s.targets == nil {
 		return nil, false, nil
 	}
-	var updated *Request
+	var missing []Target
 	for _, target := range targets {
 		if target.Status == StatusCompleted {
 			continue
@@ -31,11 +36,31 @@ func (s *Service) retireMissingSeerrTargets(ctx context.Context, req Request, ta
 		}
 		exists, err := s.targets.TargetExists(ctx, *in, target)
 		if err != nil {
-			return updated, false, err
+			return nil, false, err
 		}
 		if exists {
 			continue
 		}
+		missing = append(missing, target)
+	}
+	if len(missing) == 0 {
+		return nil, false, nil
+	}
+	return s.retireSeerrTargets(ctx, req, missing)
+}
+
+// retireSeerrTargets removes targets Seerr no longer has and, when none are
+// left, closes the request as Removed with its row and history kept. It
+// returns the request after the removals (nil when none of the targets was
+// still there) and whether the request ended up removed.
+//
+// The status sync calls it once Seerr answers 404 for a request, the reconcile
+// pass once its own existence check says the same. Closing is guarded on an
+// active request: one another actor closed meanwhile, or a target that was
+// already gone, leaves the request as it is.
+func (s *Service) retireSeerrTargets(ctx context.Context, req Request, targets []Target) (*Request, bool, error) {
+	var updated *Request
+	for _, target := range targets {
 		next, err := s.store.RemoveTarget(ctx, target.ID, Viewer{})
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -44,7 +69,7 @@ func (s *Service) retireMissingSeerrTargets(ctx context.Context, req Request, ta
 			return updated, false, err
 		}
 		updated = next
-		if err := s.store.RecordEvent(ctx, req.ID, "removed_in_seerr", Viewer{}, "removed: the request no longer exists in Seerr"); err != nil {
+		if err := s.store.RecordEvent(ctx, req.ID, "removed_in_seerr", Viewer{}, seerrRemovedMessage); err != nil {
 			return updated, false, err
 		}
 	}
@@ -58,8 +83,14 @@ func (s *Service) retireMissingSeerrTargets(ctx context.Context, req Request, ta
 	if len(remaining) > 0 {
 		return updated, false, nil
 	}
-	final, err := s.store.SetOutcome(ctx, req.ID, StateGuard{}, OutcomeRemoved, Viewer{}, "removed: the request no longer exists in Seerr")
+	final, err := s.store.SetOutcome(ctx, req.ID, StateGuard{Outcomes: []Outcome{OutcomeActive}},
+		OutcomeRemoved, Viewer{}, seerrRemovedMessage)
 	if err != nil {
+		if errors.Is(err, ErrInvalidState) || errors.Is(err, ErrNotFound) {
+			// A person closed the request, or it is gone: the targets are
+			// retired either way, and the outcome is theirs to keep.
+			return updated, false, nil
+		}
 		return updated, false, err
 	}
 	return final, true, nil

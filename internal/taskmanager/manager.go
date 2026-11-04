@@ -277,6 +277,18 @@ func (m *TaskManager) RunTask(ctx context.Context, key string) error {
 	return nil
 }
 
+// HasCompletedRun reports whether the task's newest recorded run finished
+// without error. A task that owes one-time work after an upgrade — a first
+// sweep over the rows an existing deployment already has — uses it instead of
+// persisting a marker of its own: the run that does the work is the marker.
+func (m *TaskManager) HasCompletedRun(ctx context.Context, key string) bool {
+	if m == nil || m.historyRepo == nil {
+		return false
+	}
+	latest, err := m.historyRepo.GetLatest(ctx, key)
+	return err == nil && latest != nil && latest.Status == "completed"
+}
+
 // manualStartKey marks the execution context of a run started by StartTask.
 type manualStartKey struct{}
 
