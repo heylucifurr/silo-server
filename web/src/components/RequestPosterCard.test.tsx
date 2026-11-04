@@ -106,6 +106,57 @@ describe("RequestPosterCard (discover variant)", () => {
     expect(chip.closest(".group\\/media")).not.toBeNull();
   });
 
+  it("leaves Processing off a title the library already has", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="discover"
+          item={{
+            ...requestable,
+            availability: "available",
+            library_content_id: "movie tmdb 42",
+            request: {
+              requestable: false,
+              reason: "already_requested",
+              status: "downloading",
+              state: "processing",
+            },
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    // An upgrade in progress reads as Processing next to In library; the chip
+    // carries the news, so the two do not contradict each other.
+    expect(screen.queryByText("Processing")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open Test Movie in library" })).toBeInTheDocument();
+  });
+
+  it("keeps a failed request's badge on a title the library already has", () => {
+    render(
+      <MemoryRouter>
+        <RequestPosterCard
+          variant="discover"
+          item={{
+            ...requestable,
+            availability: "available",
+            library_content_id: "movie tmdb 42",
+            request: {
+              requestable: false,
+              reason: "already_requested",
+              status: "approved",
+              state: "failed",
+            },
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    // The chip cannot say the upgrade failed, so that badge stays.
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Test Movie in library" })).toBeInTheDocument();
+  });
+
   it("shows the default artwork in place of a poster that fails to load", () => {
     const { container } = render(
       <MemoryRouter>

@@ -98,11 +98,16 @@ function DiscoverCard({
     : undefined;
   // A title the library has carries the In library chip. A badge reading
   // Available, or a reason saying the same, would only repeat it, so those are
-  // the states the chip leaves out.
+  // the states the chip leaves out. An in-progress request for a title the
+  // library already has (an upgrade) reads as Processing next to In library,
+  // so the chip carries that news too; a failed or declined request, which the
+  // chip cannot say, keeps its badge.
+  const inLibrary = Boolean(item.library_content_id);
+  const inProgress = state === "processing" || state === "pending" || state === "approved";
   const badge =
-    state && state !== "available" ? (
+    state && state !== "available" && !(inLibrary && inProgress) ? (
       <RequestStatusBadge state={state} overlay className={BADGE_CLASS} />
-    ) : !requestable && item.request.reason !== "already_available" ? (
+    ) : !inLibrary && !requestable && item.request.reason !== "already_available" ? (
       <RequestReasonBadge reason={item.request.reason} overlay className={BADGE_CLASS} />
     ) : null;
 
