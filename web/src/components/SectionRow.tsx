@@ -233,6 +233,14 @@ export default memo(function SectionRow({
               }`}
               role="listitem"
             >
+              {/*
+               * Overlay chips are sized in container units, so they grow with
+               * the card they sit on. A row drawing wider than an ordinary one
+               * — the Featured row's opening tile, the Seasonal Picks band's
+               * cards — holds them at the reference size instead, the size a
+               * chip has on a 185px Home poster, so the same overlay reads the
+               * same on every card however wide a row draws it.
+               */}
               <SectionItemCard
                 item={item}
                 libraryId={libraryId}
@@ -246,7 +254,7 @@ export default memo(function SectionRow({
                 rankedNumeralClasses={
                   isRanked && index === 0 ? rankedOneNumeralClasses : rankedNumeralClasses
                 }
-                overlayScale={isExpanding ? "reference" : "card"}
+                overlayScale={usesFeaturedWidth ? "reference" : "card"}
                 expandable={isExpanding}
                 expanded={isExpanding && expandedKey === item.content_id}
                 onExpand={() => setExpandedKey(item.content_id)}
