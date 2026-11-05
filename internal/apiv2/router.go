@@ -216,6 +216,7 @@ type Dependencies struct {
 	AdminServerStatus             AdminServerStatusService
 	AdminServerRestart            AdminServerRestartService
 	AdminBrandingAssets           AdminBrandingAssetService
+	SeasonalBackgrounds           SeasonalBackgroundService
 	AdminEmailTests               AdminEmailTestService
 	AdminSourceWebhookLifecycle   AdminAutoscanWebhookLifecycleService
 	AdminAutoscanSettingsUpdates  AdminAutoscanSettingsUpdateService

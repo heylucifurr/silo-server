@@ -4802,6 +4802,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v2/admin/sections/seasonal-backgrounds": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Store one Seasonal Picks background image and answer the reference a holiday's appearance saves. The image is re-encoded to WebP, addressed by the hash of the stored bytes, and served immutably from getSeasonalBackground. Until an administrator saves a row with the reference nothing shows it; replacing one leaves the previous object in place, as branding assets do. */
+    post: operations["uploadSeasonalBackground"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v2/admin/server/restart": {
     parameters: {
       query?: never;
@@ -11149,6 +11166,24 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v2/seasonal-backgrounds/{ref}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a stored Seasonal Picks background image. Public, because the home page loads it as a plain image; the reference is the content hash, so the bytes are cached immutably. */
+    get: operations["getSeasonalBackground"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    /** Read a stored Seasonal Picks background image. Public, because the home page loads it as a plain image; the reference is the content hash, so the bytes are cached immutably. */
+    head: operations["headSeasonalBackground"];
     patch?: never;
     trace?: never;
   };
@@ -31625,6 +31660,26 @@ export interface components {
       title: string;
       user_data?: components["schemas"]["WatchRollup"];
     };
+    SeasonalBackground: {
+      /**
+       * @description Content-addressed reference to save in the holiday's appearance.background
+       * @example 5f0a1c9d3e7b2846.webp
+       */
+      ref: string;
+      /**
+       * Format: uri-reference
+       * @description Stable, immutable path the image is served from; it changes when the stored bytes change
+       * @example /api/v2/seasonal-backgrounds/5f0a1c9d3e7b2846.webp
+       */
+      url: string;
+    };
+    SeasonalBackgroundUploadForm: {
+      /**
+       * Format: binary
+       * @description The background: JPEG, PNG or WebP, at most 12 MiB. It is re-encoded to WebP on the way in, so a phone photo is fine as it comes off the camera.
+       */
+      file: string;
+    };
     SeasonalTheme: {
       /** @description Whether a row may set its own yearly window for this holiday in theme_dates. False for weekly themes. */
       dates_editable: boolean;
@@ -31723,6 +31778,29 @@ export interface components {
        */
       total_count: number;
     };
+    SectionAppearance: {
+      /**
+       * Format: uri-reference
+       * @description Where the uploaded background is served from; absent when the row has none and the web falls back to the first card's backdrop
+       * @example /api/v2/seasonal-backgrounds/5f0a1c9d3e7b2846.webp
+       */
+      background_url?: string;
+      /**
+       * @description The band's button; absent means the web's own default
+       * @example Watch now
+       */
+      button_label?: string;
+      /**
+       * @description The line the band leads with
+       * @example Come experience the magic
+       */
+      headline?: string;
+      /**
+       * @description The line under the headline
+       * @example Your Hogwarts Adventure Awaits
+       */
+      subtitle?: string;
+    };
     SectionCollection: {
       /** @description Empty, never null */
       sections: components["schemas"]["Section"][];
@@ -31732,6 +31810,8 @@ export interface components {
       sections: components["schemas"]["SectionLayoutEntry"][];
     };
     SectionLayoutEntry: {
+      /** @description How a Seasonal Picks row dresses itself on the web home page right now; absent for every other row, and off-season */
+      appearance?: components["schemas"]["SectionAppearance"];
       /**
        * @description The profile has overridden the section's placement or visibility
        * @example false
@@ -79403,6 +79483,143 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AdminSectionPreviewResult"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Acceptable */
+      406: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  uploadSeasonalBackground: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted. */
+        "X-Profile-Id"?: string;
+        /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+        "X-Profile-Token"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["SeasonalBackgroundUploadForm"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SeasonalBackground"];
         };
       };
       /** @description Bad Request */
@@ -133325,6 +133542,108 @@ export interface operations {
         content: {
           "application/problem+json": components["schemas"]["Problem"];
         };
+      };
+    };
+  };
+  getSeasonalBackground: {
+    parameters: {
+      query?: never;
+      header?: {
+        "If-None-Match"?: string;
+      };
+      path: {
+        /** @description Content reference returned by the admin upload. */
+        ref: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Background image bytes (no body for HEAD) */
+      200: {
+        headers: {
+          "Cache-Control"?: string;
+          "Content-Length"?: string;
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "image/webp": string;
+        };
+      };
+      /** @description Image unchanged */
+      304: {
+        headers: {
+          "Cache-Control"?: string;
+          "Content-Length"?: string;
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Unknown reference */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Background storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  headSeasonalBackground: {
+    parameters: {
+      query?: never;
+      header?: {
+        "If-None-Match"?: string;
+      };
+      path: {
+        /** @description Content reference returned by the admin upload. */
+        ref: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Background image bytes (no body for HEAD) */
+      200: {
+        headers: {
+          "Cache-Control"?: string;
+          "Content-Length"?: string;
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Image unchanged */
+      304: {
+        headers: {
+          "Cache-Control"?: string;
+          "Content-Length"?: string;
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Unknown reference */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Background storage unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -155,6 +156,9 @@ type SeasonalCustomHoliday struct {
 	ListURL string `json:"list_url"`
 	// Title names the row in season; empty uses Name.
 	Title string `json:"title,omitempty"`
+	// Appearance dresses the row on the web home page while this holiday is in
+	// season. Absent on every row saved before it existed.
+	Appearance SeasonalAppearance `json:"appearance,omitempty"`
 }
 
 // SeasonalDates is a yearly window a row sets for a built-in theme in place of
@@ -163,6 +167,54 @@ type SeasonalDates struct {
 	Start string `json:"start"`
 	End   string `json:"end"`
 }
+
+// SeasonalAppearance is how a seasonal row dresses itself on the web home page
+// while one holiday is in season: an uploaded background, a headline, a
+// subtitle and the label of the button that opens the row's catalog page. The
+// apps read none of it — they show the row as they always have — so every field
+// is optional and an all-empty value is what every row saved before this
+// existed carries.
+type SeasonalAppearance struct {
+	// Background is the content reference of an uploaded background image
+	// ("<hash>.webp"), stored under the seasonal backgrounds key prefix. Empty
+	// means the web uses the first title's backdrop instead.
+	Background  string `json:"background,omitempty"`
+	Headline    string `json:"headline,omitempty"`
+	Subtitle    string `json:"subtitle,omitempty"`
+	ButtonLabel string `json:"button_label,omitempty"`
+}
+
+// Empty reports whether the appearance says nothing, so a row need not save an
+// empty object for every holiday it enables.
+func (a SeasonalAppearance) Empty() bool {
+	return a.Background == "" && a.Headline == "" && a.Subtitle == "" && a.ButtonLabel == ""
+}
+
+// Trimmed returns the appearance with surrounding whitespace removed, which is
+// what the row stores and serves. A button without a label keeps its empty
+// value: "Watch now" is the web client's default, not a stored one, so a
+// translated client can pick its own wording.
+func (a SeasonalAppearance) Trimmed() SeasonalAppearance {
+	a.Background = strings.TrimSpace(a.Background)
+	a.Headline = strings.TrimSpace(a.Headline)
+	a.Subtitle = strings.TrimSpace(a.Subtitle)
+	a.ButtonLabel = strings.TrimSpace(a.ButtonLabel)
+	return a
+}
+
+// Limits on the appearance's text, in runes. They are generous for the ~30% of
+// the home page the text block occupies; the point is that a config cannot
+// carry a novel into every home layout response.
+const (
+	MaxSeasonalHeadlineRunes    = 120
+	MaxSeasonalSubtitleRunes    = 200
+	MaxSeasonalButtonLabelRunes = 40
+)
+
+// SeasonalBackgroundRefPattern is the shape of a stored background reference: a
+// truncated SHA-256 of the stored bytes and a WebP extension. Anything else is
+// a hand-edited config, and it is dropped rather than turned into a storage key.
+var SeasonalBackgroundRefPattern = regexp.MustCompile(`^[0-9a-f]{16}\.webp$`)
 
 // SeasonalThemedParams configures the seasonal_themed resolver.
 //
@@ -191,6 +243,10 @@ type SeasonalThemedParams struct {
 	ThemeDates     map[string]SeasonalDates `json:"theme_dates,omitempty"`
 	Source         string                   `json:"source,omitempty"`
 	CustomHolidays []SeasonalCustomHoliday  `json:"custom_holidays,omitempty"`
+	// ThemeAppearance dresses the row on the web home page while a built-in
+	// holiday is in season, keyed by theme. Custom holidays carry their own on
+	// the holiday.
+	ThemeAppearance map[string]SeasonalAppearance `json:"theme_appearance,omitempty"`
 
 	// Legacy single-theme fields. Still honored when EnabledThemes and
 	// CustomHolidays are empty.
@@ -271,6 +327,14 @@ func (seasonalRecipe) Validate(raw json.RawMessage) error {
 			return fmt.Errorf("seasonal_themed: theme %q: end %q is not MM-DD", theme, dates.End)
 		}
 	}
+	for theme, appearance := range p.ThemeAppearance {
+		if _, ok := SeasonalThemeByKey(theme); !ok {
+			return fmt.Errorf("seasonal_themed: unknown theme %q in theme_appearance", theme)
+		}
+		if err := validateAppearance(appearance); err != nil {
+			return fmt.Errorf("seasonal_themed: theme %q: %w", theme, err)
+		}
+	}
 	if err := validateCustomHolidays(p.CustomHolidays); err != nil {
 		return err
 	}
@@ -313,6 +377,28 @@ func validateCustomHolidays(holidays []SeasonalCustomHoliday) error {
 		if _, err := collectionutil.CanonicalMDBListURL(h.ListURL); err != nil {
 			return fmt.Errorf("seasonal_themed: custom holiday %q: list_url must be an MDBList list (https://mdblist.com/lists/...)", h.Name)
 		}
+		if err := validateAppearance(h.Appearance); err != nil {
+			return fmt.Errorf("seasonal_themed: custom holiday %q: %w", h.Name, err)
+		}
+	}
+	return nil
+}
+
+// validateAppearance refuses an appearance the server could not serve or the
+// web could not draw: a background reference it did not write, or text well
+// past what the row's text block holds.
+func validateAppearance(a SeasonalAppearance) error {
+	if a.Background != "" && !SeasonalBackgroundRefPattern.MatchString(strings.TrimSpace(a.Background)) {
+		return errors.New("background must be a reference an upload returned")
+	}
+	if utf8.RuneCountInString(a.Headline) > MaxSeasonalHeadlineRunes {
+		return fmt.Errorf("headline is at most %d characters", MaxSeasonalHeadlineRunes)
+	}
+	if utf8.RuneCountInString(a.Subtitle) > MaxSeasonalSubtitleRunes {
+		return fmt.Errorf("subtitle is at most %d characters", MaxSeasonalSubtitleRunes)
+	}
+	if utf8.RuneCountInString(a.ButtonLabel) > MaxSeasonalButtonLabelRunes {
+		return fmt.Errorf("button_label is at most %d characters", MaxSeasonalButtonLabelRunes)
 	}
 	return nil
 }
@@ -373,13 +459,15 @@ func (seasonalRecipe) Definition() RecipeDefinition {
 const DefaultSeasonalConfig = `{"enabled_themes":["halloween","christmas","new_year","valentines","st_patricks","easter","thanksgiving","summer_blockbuster","saturday_morning"]}`
 
 // SeasonalPick is what a seasonal row shows right now: a theme (built-in or
-// custom), the list behind it, and the row's in-season title.
+// custom), the list behind it, the row's in-season title, and how the web home
+// page dresses the row for it.
 type SeasonalPick struct {
 	// Theme is the built-in theme key; empty for a custom holiday.
-	Theme   string
-	Vibe    string
-	ListURL string
-	Title   string
+	Theme      string
+	Vibe       string
+	ListURL    string
+	Title      string
+	Appearance SeasonalAppearance
 }
 
 // ActiveSeasonalPick returns what the row shows at now, or false when nothing
@@ -393,7 +481,7 @@ func ActiveSeasonalPick(p SeasonalThemedParams, now time.Time) (SeasonalPick, bo
 			if title == "" {
 				title = strings.TrimSpace(h.Name)
 			}
-			return SeasonalPick{ListURL: h.ListURL, Title: title}, true
+			return SeasonalPick{ListURL: h.ListURL, Title: title, Appearance: usableAppearance(h.Appearance)}, true
 		}
 	}
 	var theme string
@@ -415,7 +503,21 @@ func ActiveSeasonalPick(p SeasonalThemedParams, now time.Time) (SeasonalPick, bo
 	if title == "" {
 		title = vibe.Title
 	}
-	return SeasonalPick{Theme: theme, Vibe: vibe.Key, ListURL: vibe.ListURL, Title: title}, true
+	return SeasonalPick{Theme: theme, Vibe: vibe.Key, ListURL: vibe.ListURL, Title: title, Appearance: usableAppearance(p.ThemeAppearance[theme])}, true
+}
+
+// usableAppearance trims an appearance and drops a background reference the
+// server did not write, so a hand-edited config can never name a storage key.
+// The text is left as saved; only the reference is a security-relevant value.
+func usableAppearance(a SeasonalAppearance) SeasonalAppearance {
+	a = a.Trimmed()
+	if a.Background != "" && !SeasonalBackgroundRefPattern.MatchString(a.Background) {
+		a.Background = ""
+	}
+	if a.Empty() {
+		return SeasonalAppearance{}
+	}
+	return a
 }
 
 // SeasonalListURLsAround returns the list URLs a row will show from now

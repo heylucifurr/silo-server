@@ -46,6 +46,50 @@ Nothing in season means an empty row, which the home API drops. The row title
 in season is `theme_titles[theme]`, else the vibe's title (a custom holiday's
 `title`, else its name).
 
+## The web hero band
+
+The web home page draws a seasonal row as a full-width band while a holiday is
+in season: the uploaded image fills the band, an overlay — three gradients,
+Prime Video's own with their navy swapped for this app's page colour — darkens
+it behind the text and fades it into the rows above and below, and the row's
+carousel draws over both at the Featured row's card size. From lg up the band's
+text is the row's first slide: a card two Featured posters wide, centred, that
+scrolls away with the posters. Below lg the same text stacks above the row and
+the artwork stays behind both, because an info card on a phone leaves room for
+barely one poster. Nothing else draws that way, and no other client reads any
+of it. The web pieces are `SeasonalHeroRow` (band, overlay, info card) and
+`SectionRow`'s `lead` slide; `lib/seasonalBand` decides what the appearance
+means and `lib/uiCustomization` owns the info card's width.
+
+The dressing is per holiday, in the row's own config:
+
+- `theme_appearance[theme]` for a built-in holiday,
+- `custom_holidays[].appearance` for one of the user's own,
+
+each `{background, headline, subtitle, button_label}` (the server's
+`recipes.SeasonalAppearance`). `background` is the content reference an upload
+returned, never a URL or a path; a config naming anything else has that field
+dropped on read, so a hand-edited row cannot point at an arbitrary object.
+Text is trimmed on read; an empty button label means the web's own default
+("Watch now"). Rows saved before any of this existed have no keys and render as
+they always did.
+
+`ActiveSeasonalPick` carries the in-season holiday's appearance on
+`SeasonalPick`, `handlers.seasonalAppearanceOf` resolves it for a page's layout,
+and v2 serves it as the optional `appearance` object on a layout entry
+(`background_url`, `headline`, `subtitle`, `button_label`). The v1 layout body
+does not carry it at all (`resolvedSectionLayoutResponse.Appearance` is
+`json:"-"`), so the frozen contract is unchanged; a client that ignores the
+member renders the row as before.
+
+Uploads go through `POST /api/v2/admin/sections/seasonal-backgrounds`, are
+re-encoded to WebP at most 2560 wide (`internal/seasonalbackground`), and are
+stored in the artwork blob store under `seasonal-backgrounds/<hash>.webp`, so
+they persist wherever artwork already persists (the local artwork root, or the
+public bucket). The reference is the hash of the stored bytes, served
+immutably from `GET /api/v2/seasonal-backgrounds/{ref}`; replacing a background
+changes its URL, and an upload nothing references yet is inert.
+
 ## Lists
 
 `seasonal_list_snapshots` keeps one row per canonical MDBList `/json` URL with

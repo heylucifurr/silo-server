@@ -1063,6 +1063,7 @@ var mutationWithoutLegacyRow = map[string]string{
 	"replaceAdminUserProfileSectionOverrides": "V2-only administrator edit of one profile's page layout: v1 could only change the caller's own profile. It runs the same full-replacement write as replaceProfileSectionOverrides, which is non-retryable because a save can start a trending refresh.",
 	"resetAdminUserProfileSectionOverrides":   "V2-only administrator reset of one profile's page layout: v1 reset only the caller's own profile or every profile at once. It runs the same delete as resetProfileSectionOverrides and is non-retryable like it.",
 	"adminRefreshRequest":                     "V2-only re-read of one request's status from Seerr (v1 is frozen and had no such action). It reads Seerr and re-applies what it reports, so a replay converges on the same request state.",
+	"uploadSeasonalBackground":                "V2-only Seasonal Picks hero background upload (v1 is frozen and had no row appearance). It stores a new content-addressed object and shows nothing until a row saves the reference, so a duplicate call leaves one extra orphaned image and no visible change.",
 }
 
 // retrySafetyMismatches compares every operation the v2 registry declares

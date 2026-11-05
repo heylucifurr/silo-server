@@ -79,6 +79,7 @@ import (
 	"github.com/Silo-Server/silo-server/internal/s3client"
 	"github.com/Silo-Server/silo-server/internal/scanner"
 	"github.com/Silo-Server/silo-server/internal/scanqueue"
+	"github.com/Silo-Server/silo-server/internal/seasonalbackground"
 	"github.com/Silo-Server/silo-server/internal/secret"
 	"github.com/Silo-Server/silo-server/internal/sections"
 	"github.com/Silo-Server/silo-server/internal/serveridentity"
@@ -3207,6 +3208,10 @@ func newChiRouter(deps Dependencies) chi.Router {
 	if deps.BrandingService != nil {
 		v2deps.AdminBrandingAssets = handlers.NewBrandingHandler(deps.BrandingService)
 	}
+	// Seasonal Picks backgrounds ride the artwork store: a deployment that
+	// already keeps artwork on disk or in a bucket keeps these images the same
+	// way, with nothing new to mount.
+	v2deps.SeasonalBackgrounds = handlers.NewSeasonalBackgroundHandler(seasonalbackground.NewService(deps.Blobs.Assets))
 	if deps.v2Wiring != nil {
 		deps.v2Wiring(v2deps)
 	}

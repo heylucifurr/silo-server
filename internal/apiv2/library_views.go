@@ -50,15 +50,31 @@ type LibrarySectionItemsInput struct {
 	ArtworkQuery
 }
 
+// SectionAppearance is how a Seasonal Picks row dresses itself on the web home
+// page while a holiday is in season: an uploaded background, a headline, a
+// subtitle, and the label of the button that opens the row's catalog page.
+//
+// Optional and additive. It rides the layout entry rather than changing any
+// field a client already reads, so a client that ignores it — every native app
+// does — renders the row exactly as before. Every member is optional; an
+// absent appearance is the ordinary case for every other row type.
+type SectionAppearance struct {
+	BackgroundURL string `json:"background_url,omitempty" format:"uri-reference" doc:"Where the uploaded background is served from; absent when the row has none and the web falls back to the first card's backdrop" example:"/api/v2/seasonal-backgrounds/5f0a1c9d3e7b2846.webp"`
+	Headline      string `json:"headline,omitempty" doc:"The line the band leads with" example:"Come experience the magic"`
+	Subtitle      string `json:"subtitle,omitempty" doc:"The line under the headline" example:"Your Hogwarts Adventure Awaits"`
+	ButtonLabel   string `json:"button_label,omitempty" doc:"The band's button; absent means the web's own default" example:"Watch now"`
+}
+
 // SectionLayoutEntry is one section of a page layout, without items.
 type SectionLayoutEntry struct {
-	ID          string `json:"id" example:"recently_added"`
-	SectionType string `json:"section_type" example:"recently_added"`
-	Title       string `json:"title" example:"Recently Added"`
-	Featured    bool   `json:"featured" example:"false"`
-	ItemLimit   int    `json:"item_limit" example:"20"`
-	IsCustom    bool   `json:"is_custom" doc:"An administrator-defined section rather than a built-in one" example:"false"`
-	Customized  bool   `json:"customized" doc:"The profile has overridden the section's placement or visibility" example:"false"`
+	ID          string             `json:"id" example:"recently_added"`
+	SectionType string             `json:"section_type" example:"recently_added"`
+	Title       string             `json:"title" example:"Recently Added"`
+	Featured    bool               `json:"featured" example:"false"`
+	ItemLimit   int                `json:"item_limit" example:"20"`
+	IsCustom    bool               `json:"is_custom" doc:"An administrator-defined section rather than a built-in one" example:"false"`
+	Customized  bool               `json:"customized" doc:"The profile has overridden the section's placement or visibility" example:"false"`
+	Appearance  *SectionAppearance `json:"appearance,omitempty" doc:"How a Seasonal Picks row dresses itself on the web home page right now; absent for every other row, and off-season"`
 }
 
 // SectionLayout is a page's sections in display order.
@@ -277,7 +293,15 @@ func (reg *Registry) getLibraryLayout(ctx context.Context, in *LibraryViewInput)
 func sectionLayoutOf(view handlers.SectionLayoutView) SectionLayout {
 	out := SectionLayout{Sections: make([]SectionLayoutEntry, 0, len(view.Sections))}
 	for _, s := range view.Sections {
-		out.Sections = append(out.Sections, SectionLayoutEntry{ID: s.ID, SectionType: s.SectionType, Title: s.Title, Featured: s.Featured, ItemLimit: s.ItemLimit, IsCustom: s.IsCustom, Customized: s.Customized})
+		entry := SectionLayoutEntry{ID: s.ID, SectionType: s.SectionType, Title: s.Title, Featured: s.Featured, ItemLimit: s.ItemLimit, IsCustom: s.IsCustom, Customized: s.Customized}
+		if a := s.Appearance; a != nil {
+			appearance := &SectionAppearance{Headline: a.Headline, Subtitle: a.Subtitle, ButtonLabel: a.ButtonLabel}
+			if a.BackgroundRef != "" {
+				appearance.BackgroundURL = seasonalBackgroundURL(a.BackgroundRef)
+			}
+			entry.Appearance = appearance
+		}
+		out.Sections = append(out.Sections, entry)
 	}
 	return out
 }

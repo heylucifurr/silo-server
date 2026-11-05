@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Silo-Server/silo-server/internal/catalog"
 	"github.com/Silo-Server/silo-server/internal/imagesize"
@@ -172,6 +173,9 @@ func (h *SectionHandler) LibraryLayout(ctx context.Context, libraryID int) (Sect
 }
 
 func sectionLayoutOf(resolved []sections.ResolvedSection) SectionLayoutView {
+	// One clock reading for the whole page: two rows of the same page can never
+	// disagree about which holiday is in season.
+	now := time.Now()
 	resp := SectionLayoutView{Sections: make([]resolvedSectionLayoutResponse, 0, len(resolved))}
 	for _, s := range resolved {
 		resp.Sections = append(resp.Sections, resolvedSectionLayoutResponse{
@@ -182,6 +186,7 @@ func sectionLayoutOf(resolved []sections.ResolvedSection) SectionLayoutView {
 			ItemLimit:   s.ItemLimit,
 			IsCustom:    s.IsCustom,
 			Customized:  s.Customized,
+			Appearance:  seasonalAppearanceOf(s, now),
 		})
 	}
 	return resp

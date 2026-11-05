@@ -478,7 +478,7 @@ type sectionItemResponse struct {
 	// HeroVideoURL is the clip this card's title may play behind the hero (see
 	// internal/heroclips). json:"-" for the same reason as the advisory: the
 	// field exists on the Go struct only, and apiv2 emits it under its own name.
-	HeroVideoURL           string                 `json:"-"`
+	HeroVideoURL string `json:"-"`
 	// Availability is how an anticipated slide reads: in_library, unreleased or
 	// released_unowned. Empty on every other row, and v2 emits it under its own
 	// name (json:"-").
@@ -488,8 +488,8 @@ type sectionItemResponse struct {
 	TMDBID int `json:"-"`
 	// InWatchlist and Requestable carry the viewer's request state on an
 	// unowned anticipated slide. Nil elsewhere and when requests are off.
-	InWatchlist *bool `json:"-"`
-	Requestable *bool `json:"-"`
+	InWatchlist            *bool                  `json:"-"`
+	Requestable            *bool                  `json:"-"`
 	Status                 string                 `json:"status"`
 	ShowStatus             string                 `json:"show_status,omitempty"`
 	RatingIMDB             *float64               `json:"rating_imdb,omitempty"`
@@ -566,6 +566,12 @@ type resolvedSectionLayoutResponse struct {
 	ItemLimit   int    `json:"item_limit"`
 	IsCustom    bool   `json:"is_custom"`
 	Customized  bool   `json:"customized"`
+
+	// Appearance is how a seasonal row dresses itself on the web home page
+	// while a holiday is in season. Not serialized: only the v2 layout carries
+	// it, so the frozen v1 body keeps answering exactly the fields it always
+	// has. Devices read none of this.
+	Appearance *SeasonalAppearanceView `json:"-"`
 }
 
 type homeLayoutResponse struct {

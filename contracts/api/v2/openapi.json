@@ -47115,6 +47115,47 @@
         ],
         "type": "object"
       },
+      "SeasonalBackground": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "description": "Content-addressed reference to save in the holiday's appearance.background",
+            "examples": [
+              "5f0a1c9d3e7b2846.webp"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "Stable, immutable path the image is served from; it changes when the stored bytes change",
+            "examples": [
+              "/api/v2/seasonal-backgrounds/5f0a1c9d3e7b2846.webp"
+            ],
+            "format": "uri-reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SeasonalBackgroundUploadForm": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "contentEncoding": "binary",
+            "contentMediaType": "application/octet-stream",
+            "description": "The background: JPEG, PNG or WebP, at most 12 MiB. It is re-encoded to WebP on the way in, so a phone photo is fine as it comes off the camera.",
+            "format": "binary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
       "SeasonalTheme": {
         "additionalProperties": false,
         "properties": {
@@ -47327,6 +47368,41 @@
         ],
         "type": "object"
       },
+      "SectionAppearance": {
+        "additionalProperties": false,
+        "properties": {
+          "background_url": {
+            "description": "Where the uploaded background is served from; absent when the row has none and the web falls back to the first card's backdrop",
+            "examples": [
+              "/api/v2/seasonal-backgrounds/5f0a1c9d3e7b2846.webp"
+            ],
+            "format": "uri-reference",
+            "type": "string"
+          },
+          "button_label": {
+            "description": "The band's button; absent means the web's own default",
+            "examples": [
+              "Watch now"
+            ],
+            "type": "string"
+          },
+          "headline": {
+            "description": "The line the band leads with",
+            "examples": [
+              "Come experience the magic"
+            ],
+            "type": "string"
+          },
+          "subtitle": {
+            "description": "The line under the headline",
+            "examples": [
+              "Your Hogwarts Adventure Awaits"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SectionCollection": {
         "additionalProperties": false,
         "properties": {
@@ -47362,6 +47438,10 @@
       "SectionLayoutEntry": {
         "additionalProperties": false,
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/SectionAppearance",
+            "description": "How a Seasonal Picks row dresses itself on the web home page right now; absent for every other row, and off-season"
+          },
           "customized": {
             "description": "The profile has overridden the section's placement or visibility",
             "examples": [
@@ -119819,6 +119899,195 @@
           }
         ],
         "summary": "Preview a recipe without saving it.",
+        "tags": [
+          "admin-sections"
+        ],
+        "x-silo-class": "acting_admin",
+        "x-silo-demo-restricted": true,
+        "x-silo-retry-safety": "non_retryable",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/admin/sections/seasonal-backgrounds": {
+      "post": {
+        "operationId": "uploadSeasonalBackground",
+        "parameters": [
+          {
+            "description": "Optional. When present, it must name the authenticated account's primary profile; an absent header is accepted.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "encoding": {
+                "file": {
+                  "contentType": "image/png,image/jpeg,image/webp,application/octet-stream"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SeasonalBackgroundUploadForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonalBackground"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Store one Seasonal Picks background image and answer the reference a holiday's appearance saves. The image is re-encoded to WebP, addressed by the hash of the stored bytes, and served immutably from getSeasonalBackground. Until an administrator saves a row with the reference nothing shows it; replacing one leaves the previous object in place, as branding assets do.",
         "tags": [
           "admin-sections"
         ],
@@ -204918,6 +205187,171 @@
         ],
         "x-silo-class": "acting_admin",
         "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/seasonal-backgrounds/{ref}": {
+      "get": {
+        "operationId": "getSeasonalBackground",
+        "parameters": [
+          {
+            "description": "Content reference returned by the admin upload.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Background image bytes (no body for HEAD)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Image unchanged",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown reference"
+          },
+          "503": {
+            "description": "Background storage unavailable"
+          }
+        },
+        "summary": "Read a stored Seasonal Picks background image. Public, because the home page loads it as a plain image; the reference is the content hash, so the bytes are cached immutably.",
+        "tags": [
+          "home"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "seasonal-background-image",
+        "x-silo-raw-reason": "Image bytes and HEAD/conditional HTTP semantics bypass JSON encoding.",
+        "x-silo-service-backed": true
+      },
+      "head": {
+        "operationId": "headSeasonalBackground",
+        "parameters": [
+          {
+            "description": "Content reference returned by the admin upload.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Background image bytes (no body for HEAD)",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Image unchanged",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown reference"
+          },
+          "503": {
+            "description": "Background storage unavailable"
+          }
+        },
+        "summary": "Read a stored Seasonal Picks background image. Public, because the home page loads it as a plain image; the reference is the content hash, so the bytes are cached immutably.",
+        "tags": [
+          "home"
+        ],
+        "x-silo-class": "public",
+        "x-silo-raw-protocol": "seasonal-background-image",
+        "x-silo-raw-reason": "Image bytes and HEAD/conditional HTTP semantics bypass JSON encoding.",
         "x-silo-service-backed": true
       }
     },

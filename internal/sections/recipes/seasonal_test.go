@@ -2,6 +2,7 @@ package recipes
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -291,6 +292,15 @@ func TestSeasonalValidatesVibesSourceAndCustomHolidays(t *testing.T) {
 		{"own dates for an unknown theme", `{"enabled_themes":["christmas"],"theme_dates":{"arbor_day":{"start":"04-01","end":"04-02"}}}`, true},
 		{"own dates for a weekly theme", `{"enabled_themes":["saturday_morning"],"theme_dates":{"saturday_morning":{"start":"04-01","end":"04-02"}}}`, true},
 		{"custom holiday without a name", `{"custom_holidays":[{"name":" ","start":"07-01","end":"07-04","list_url":"https://mdblist.com/lists/a/b"}]}`, true},
+		{"appearance for a holiday", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"background":"0123456789abcdef.webp","headline":"Come experience the magic","subtitle":"Your Hogwarts Adventure Awaits","button_label":"Watch now"}}}`, false},
+		{"appearance with text only", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"headline":"Merry"}}}`, false},
+		{"appearance for an unknown theme", `{"enabled_themes":["christmas"],"theme_appearance":{"arbor_day":{"headline":"Plant a tree"}}}`, true},
+		{"appearance background is not a stored reference", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"background":"../../etc/passwd"}}}`, true},
+		{"appearance background without the hash shape", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"background":"christmas.webp"}}}`, true},
+		{"headline past the limit", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"headline":"` + strings.Repeat("x", MaxSeasonalHeadlineRunes+1) + `"}}}`, true},
+		{"button label past the limit", `{"enabled_themes":["christmas"],"theme_appearance":{"christmas":{"button_label":"` + strings.Repeat("x", MaxSeasonalButtonLabelRunes+1) + `"}}}`, true},
+		{"custom holiday with an appearance", `{"custom_holidays":[{"name":"Fourth","start":"07-01","end":"07-04","list_url":"https://mdblist.com/lists/a/b","appearance":{"headline":"Happy Fourth","background":"0123456789abcdef.webp"}}]}`, false},
+		{"custom holiday with a foreign background", `{"custom_holidays":[{"name":"Fourth","start":"07-01","end":"07-04","list_url":"https://mdblist.com/lists/a/b","appearance":{"background":"/var/lib/silo/secret.webp"}}]}`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -403,6 +413,84 @@ func TestSeasonalThemeOrders(t *testing.T) {
 		if usualStart(prev) > usualStart(next) {
 			t.Errorf("catalog lists %q before %q, out of calendar order", prev.Key, next.Key)
 		}
+	}
+}
+
+// TestActiveSeasonalPickCarriesTheHolidayAppearance covers the web hero's
+// dressing: the appearance of the holiday actually in season, and nothing else.
+func TestActiveSeasonalPickCarriesTheHolidayAppearance(t *testing.T) {
+	oct14 := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	july2 := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	ref := "0123456789abcdef.webp"
+	halloweenLook := SeasonalAppearance{Background: ref, Headline: "  Spooky season  ", Subtitle: "Family picks", ButtonLabel: "Watch now"}
+	fourth := SeasonalCustomHoliday{
+		Name: "Fourth of July", Start: "07-01", End: "07-04", ListURL: "https://mdblist.com/lists/a/fourth",
+		Appearance: SeasonalAppearance{Headline: "Happy Fourth"},
+	}
+
+	cases := []struct {
+		name string
+		p    SeasonalThemedParams
+		now  time.Time
+		want SeasonalAppearance
+	}{
+		{
+			name: "the in-season holiday's appearance, trimmed",
+			p: SeasonalThemedParams{
+				EnabledThemes:   []string{"halloween", "christmas"},
+				ThemeAppearance: map[string]SeasonalAppearance{"halloween": halloweenLook, "christmas": {Headline: "Merry Christmas"}},
+			},
+			now:  oct14,
+			want: SeasonalAppearance{Background: ref, Headline: "Spooky season", Subtitle: "Family picks", ButtonLabel: "Watch now"},
+		},
+		{
+			name: "an in-season holiday with no appearance of its own carries nothing",
+			p: SeasonalThemedParams{
+				EnabledThemes:   []string{"christmas", "halloween"},
+				ThemeAppearance: map[string]SeasonalAppearance{"halloween": halloweenLook},
+			},
+			now: time.Date(2026, time.December, 20, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "a custom holiday's own appearance",
+			p: SeasonalThemedParams{
+				EnabledThemes:   []string{"halloween"},
+				ThemeAppearance: map[string]SeasonalAppearance{"halloween": halloweenLook},
+				CustomHolidays:  []SeasonalCustomHoliday{fourth},
+			},
+			now:  july2,
+			want: SeasonalAppearance{Headline: "Happy Fourth"},
+		},
+		{
+			name: "a background the server did not write is dropped, its text kept",
+			p: SeasonalThemedParams{
+				EnabledThemes:   []string{"halloween"},
+				ThemeAppearance: map[string]SeasonalAppearance{"halloween": {Background: "../../secret.webp", Headline: "Spooky season"}},
+			},
+			now:  oct14,
+			want: SeasonalAppearance{Headline: "Spooky season"},
+		},
+		{
+			name: "a legacy pinned row keeps its appearance off season",
+			p: SeasonalThemedParams{
+				Theme:           "halloween",
+				Mode:            "pinned",
+				ThemeAppearance: map[string]SeasonalAppearance{"halloween": halloweenLook},
+			},
+			now:  july2,
+			want: SeasonalAppearance{Background: ref, Headline: "Spooky season", Subtitle: "Family picks", ButtonLabel: "Watch now"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ActiveSeasonalPick(tc.p, tc.now)
+			if !ok {
+				t.Fatalf("ActiveSeasonalPick found nothing in season")
+			}
+			if got.Appearance != tc.want {
+				t.Fatalf("appearance = %+v, want %+v", got.Appearance, tc.want)
+			}
+		})
 	}
 }
 

@@ -77,6 +77,31 @@ from a `server_settings` row, so uploads work without an S3 bucket.
 Public reads are deliberately unauthenticated: branding has to apply on the
 login page, before anyone has a session.
 
+## Seasonal Picks backgrounds
+
+A Seasonal Picks row can dress itself as the web home page's hero band while a
+holiday is in season. The image for that band is uploaded here and referenced
+from the row's own config (`theme_appearance[theme].background`, or
+`custom_holidays[].appearance.background`) as a content reference — never a URL
+or a path.
+
+| Route                                              | Auth   | Purpose                                                                    |
+| -------------------------------------------------- | ------ | -------------------------------------------------------------------------- |
+| `POST /api/v2/admin/sections/seasonal-backgrounds`  | admin  | Upload (multipart, field name `file`; JPEG, PNG or WebP, at most 12 MiB).  |
+| `GET /api/v2/seasonal-backgrounds/{ref}`            | public | Serve the stored bytes. Content-addressed, so `immutable` cached.          |
+
+The image is re-encoded to WebP at most 2560 wide and stored in the artwork
+blob store under `seasonal-backgrounds/<hash>.webp`, so it persists wherever
+artwork does: the local artwork root (`artwork.local_path`, default
+`/var/lib/silo/artwork`) or the public S3 bucket when the backend is S3.
+Replacing a background uploads a new object and leaves the old one in place;
+only the row's config decides what is shown, and nothing is shown until a row
+saves the reference.
+
+The public read needs no session because the home page loads it as a plain
+image, which is also why deleting a background is a row-config edit rather than
+a route: the reference is what points at the bytes.
+
 `{kind}` is one of `wordmark`, `mark`, `favicon`, `login_bg`. The web client has a
 single dark theme, so the former light-theme variants are gone from v2; the frozen
 v1 upload route still accepts `wordmark_light` and `mark_light` until v1 retires,
