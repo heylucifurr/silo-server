@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { ContinueWatchingRowCard } from "@/components/ContinueWatchingCard";
 import MediaCarousel, { type MediaCarouselWindowing } from "@/components/MediaCarousel";
 import SectionItemCard from "@/components/SectionItemCard";
@@ -34,6 +34,21 @@ interface SectionRowProps {
   section: ResolvedSection;
   /** Library ID this section belongs to (enables pin-to-sidebar) */
   libraryId?: number;
+  /**
+   * Which card treatment the row draws with, when the row type alone does not
+   * decide it: "featured" gives every slide the Featured row's larger width, so
+   * the seasonal hero band's cards match it. The expanding treatment stays with
+   * the row types that own it (see featuredCard).
+   */
+  presentation?: "default" | "featured";
+  /** Draws the slides alone. The seasonal hero band brings its own headline. */
+  hideHeader?: boolean;
+  /**
+   * One extra slide drawn before the row's own cards, as if it were the first
+   * item of the row: the Seasonal Picks band's info card. It takes the width
+   * classes its own component carries, so the cards keep theirs.
+   */
+  lead?: ReactNode;
   /**
    * The row is on screen at first paint (the first Home row): its visible
    * cards load their artwork eagerly at high fetch priority.
@@ -78,6 +93,9 @@ function SectionPinButton({
 export default memo(function SectionRow({
   section,
   libraryId,
+  presentation = "default",
+  hideHeader = false,
+  lead,
   priority = false,
   onNearEnd,
 }: SectionRowProps) {
@@ -106,11 +124,13 @@ export default memo(function SectionRow({
   /*
    * The Featured row lays its cards out wider than an ordinary row does, so this
    * is the width its slides take — the same width carouselWindow measures its
-   * first commit against, or the row mounts too few of them.
+   * first commit against, or the row mounts too few of them. A row asked for
+   * presentation="featured" takes the same width without the opening tile.
    */
+  const usesFeaturedWidth = isExpanding || presentation === "featured";
   const posterWidthClasses = isRanked
     ? rankedCarouselCardWidthClasses(posterSize)
-    : isExpanding
+    : usesFeaturedWidth
       ? featuredCarouselCardWidthClasses(posterSize)
       : carouselCardWidthClasses(posterSize);
   const rankedGutterClasses = isRanked ? rankedCarouselGutterClasses(posterSize) : "";
@@ -145,7 +165,11 @@ export default memo(function SectionRow({
       : "wide";
   const slideSize = isProgressRow && progressCardVariant === "wide" ? "wide" : posterSize;
   // Which width table this row's slides are measured against.
-  const slideWidth: CarouselSlideWidth = isRanked ? "ranked" : isExpanding ? "featured" : "poster";
+  const slideWidth: CarouselSlideWidth = isRanked
+    ? "ranked"
+    : usesFeaturedWidth
+      ? "featured"
+      : "poster";
   const windowing = useMemo<MediaCarouselWindowing>(
     () => ({
       initialCount: initialCarouselSlideCount(slideSize, undefined, slideWidth),
@@ -170,10 +194,13 @@ export default memo(function SectionRow({
       titleHref={browseHref}
       viewAllHref={browseHref}
       headerActions={headerActions}
+      hideHeader={hideHeader}
       windowing={windowing}
       reflowKey={expandedKey}
       onNearEnd={onNearEnd ? handleNearEnd : undefined}
     >
+      {/* The band's info card rides the row as its first slide. */}
+      {lead}
       {isProgressRow
         ? section.items.map((item, index) => (
             <ContinueWatchingRowCard

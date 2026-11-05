@@ -11,6 +11,17 @@ vi.mock("@/hooks/queries/seasonalThemes", () => ({
   useSeasonalThemes: () => ({ data: seasonalThemes, isError: false }),
 }));
 
+// The upload itself is the server seam's (and the service's) to test; here it
+// only has to answer a reference the row can save.
+vi.mock("@/hooks/queries/seasonalBackground", () => ({
+  useUploadSeasonalBackground: () => ({
+    mutateAsync: async () => ({
+      ref: "0123456789abcdef.webp",
+      url: "/api/v2/seasonal-backgrounds/0123456789abcdef.webp",
+    }),
+  }),
+}));
+
 // Radix Select drives pointer capture and scrolling that jsdom lacks.
 beforeAll(() => {
   Object.defineProperties(Element.prototype, {
@@ -85,6 +96,38 @@ describe("Holiday fields", () => {
     expect(screen.getByText("Oct 20–Nov 2")).toBeInTheDocument();
     expect(canSave()).toBe(true);
     expect(latest.config.theme_dates).toEqual({ halloween: { start: "10-20", end: "11-02" } });
+  });
+  it("dresses a holiday for the web home page, and drops it when the holiday is off", async () => {
+    const { latest, canSave } = renderHolidays();
+
+    await userEvent.click(screen.getByRole("button", { name: "Appearance for Halloween" }));
+    expect(screen.getByText(/Shown on the web home page/)).toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Halloween headline" }),
+      "Spooky season",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Halloween subtitle" }),
+      "Family picks",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Halloween button label" }),
+      "See the picks",
+    );
+    expect(latest.config.theme_appearance).toEqual({
+      halloween: {
+        headline: "Spooky season",
+        subtitle: "Family picks",
+        button_label: "See the picks",
+      },
+    });
+    expect(canSave()).toBe(true);
+
+    // An appearance belongs to the holiday it dresses: turning that holiday off
+    // takes it out of the saved config with it.
+    await userEvent.click(screen.getByRole("checkbox", { name: "Halloween" }));
+    expect(latest.config.theme_appearance).toBeUndefined();
   });
 
   it("adds a holiday of its own and allows saving only once it is complete", async () => {

@@ -5,9 +5,11 @@ import { Link } from "react-router";
 import { LayoutDashboard } from "lucide-react";
 import HeroBanner from "@/components/HeroBanner";
 import SectionRow from "@/components/SectionRow";
+import SeasonalHeroRow from "@/components/SeasonalHeroRow";
 import TasteSeedBanner from "@/components/TasteSeedBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { HomeSectionItemsResponse, ResolvedSection, ResolvedSectionLayout } from "@/api/types";
+import type { components } from "@/api/v2/schema";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { HERO_BANNER_SIZE } from "@/lib/design-system";
 import { sectionKeys } from "@/hooks/queries/keys";
@@ -32,6 +34,9 @@ import {
 } from "@/hooks/useImmediateSidebarCollapse";
 import { SIDEBAR_DETAILS_REVEAL_DEADLINE_MS } from "@/components/sidebarItemNavigation";
 import { markCriticalContentLoaded } from "@/lib/startupPriority";
+import { isSeasonalWebRow } from "@/lib/seasonalBand";
+
+type SectionAppearance = components["schemas"]["SectionAppearance"];
 
 const MAX_CONCURRENT_SECTION_REQUESTS = 5;
 const SKELETON_CARD_COUNT = 7;
@@ -385,6 +390,7 @@ export default function Home() {
               <DeferredHomeSection
                 key={slot.layout.id}
                 section={slot.section}
+                appearance={slot.layout.appearance}
                 eager={rowIndex < EAGER_HOME_ROW_COUNT}
                 deferFirstCommit={initialCachedSections.has(slot.layout.id)}
                 priority={rowIndex === 0 && !hasHeroSlot}
@@ -432,6 +438,7 @@ export default function Home() {
 
 const DeferredHomeSection = memo(function DeferredHomeSection({
   section,
+  appearance,
   eager,
   deferFirstCommit,
   priority,
@@ -441,6 +448,8 @@ const DeferredHomeSection = memo(function DeferredHomeSection({
   restoreDelayMs,
 }: {
   section: ResolvedSection;
+  /** The row's web appearance, present only while a Seasonal Picks holiday is in season. */
+  appearance?: SectionAppearance;
   eager: boolean;
   /** The row's data was already cached when Home first rendered. */
   deferFirstCommit: boolean;
@@ -506,7 +515,25 @@ const DeferredHomeSection = memo(function DeferredHomeSection({
     };
   }, [eager, rendered, restorationReady, restoreDelayMs]);
 
-  if (rendered) return <SectionRow section={section} priority={priority} onNearEnd={onNearEnd} />;
+  if (rendered) {
+    /*
+     * A seasonal row with an appearance draws as the web's hero band: the
+     * background and text block on the left, the row's cards to the right at
+     * the Featured size. A row without one — every row on a server that sets
+     * none, and every seasonal row off season — is the ordinary section row.
+     */
+    if (isSeasonalWebRow(appearance)) {
+      return (
+        <SeasonalHeroRow
+          section={section}
+          appearance={appearance}
+          priority={priority}
+          onNearEnd={onNearEnd}
+        />
+      );
+    }
+    return <SectionRow section={section} priority={priority} onNearEnd={onNearEnd} />;
+  }
 
   return (
     <div

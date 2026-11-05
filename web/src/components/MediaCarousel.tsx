@@ -64,6 +64,12 @@ interface MediaCarouselProps {
    * uppercase eyebrow title, tighter header spacing, and no page-level gap.
    */
   compact?: boolean;
+  /**
+   * Draws the slides alone, with no title or "Explore all" header. The hero
+   * band supplies its own headline and button and would otherwise show two
+   * headings for one row.
+   */
+  hideHeader?: boolean;
   windowing?: MediaCarouselWindowing;
   /**
    * Changes whenever a slide's own width changes — an opening card. Embla
@@ -219,6 +225,7 @@ export default function MediaCarousel({
   headerActions,
   edgePadding = true,
   compact = false,
+  hideHeader = false,
   windowing,
   reflowKey,
   onNearEnd,
@@ -276,7 +283,10 @@ export default function MediaCarousel({
         } as CSSProperties
       }
     >
-      <div className={`${headerGap} flex items-end justify-between gap-4${headerPadX}`}>
+      <div
+        className={`${headerGap} flex items-end justify-between gap-4${headerPadX}`}
+        hidden={hideHeader}
+      >
         <div className="flex items-center gap-2">
           {titleHref ? (
             <Link to={titleHref} className="group/title hover:text-primary transition-colors">

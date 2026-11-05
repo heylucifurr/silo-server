@@ -7,6 +7,8 @@ import {
   carouselCardWidthPx,
   carouselCardWidthClasses,
   featuredCarouselCardWidthClasses,
+  seasonalInfoCardWidthClasses,
+  seasonalInfoCardWidthPx,
   defaultWebPrimaryMenu,
   menuItemKey,
   moveMenuItem,
@@ -242,6 +244,29 @@ describe("UI customization contract helpers", () => {
         } else {
           expect(featuredWidth).toBeGreaterThan(plainWidth);
         }
+      }
+    }
+  });
+
+  it("sizes the Seasonal Picks info card as two Featured posters and their gap", () => {
+    // The band's text block is a slide like any other, and takes the room two
+    // posters and the gap between them take, so the row still reads as cards.
+    // The gap is MediaCarousel's slideGap: 16px until lg, 20px from it.
+    const viewports = [500, 800, 1200, 1440, 1700];
+
+    for (const size of ["compact", "standard", "large"] as const) {
+      const classes = pxValues(seasonalInfoCardWidthClasses(size), "w");
+      expect(classes).toHaveLength(5);
+
+      for (const [index, viewportWidth] of viewports.entries()) {
+        const width = classes[index];
+        if (width === undefined) {
+          throw new Error(`info card ${size} has no width for a ${viewportWidth}px viewport`);
+        }
+        const gap = viewportWidth >= 1024 ? 20 : 16;
+        const want = carouselCardWidthPx(size, viewportWidth, "featured") * 2 + gap;
+        expect(width).toBe(want);
+        expect(seasonalInfoCardWidthPx(size, viewportWidth)).toBe(want);
       }
     }
   });

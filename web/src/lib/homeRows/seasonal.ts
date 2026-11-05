@@ -8,6 +8,80 @@ export interface CustomHoliday {
   end: string;
   list_url: string;
   title?: string;
+  /** How the row dresses itself on the web home page in season. */
+  appearance?: HolidayAppearance;
+}
+
+/**
+ * How a Seasonal Picks row dresses itself on the web home page while one
+ * holiday is in season (the server's SeasonalAppearance). Every field is
+ * optional and the apps read none of it.
+ */
+export interface HolidayAppearance {
+  /** Content reference of an uploaded background, not a URL. */
+  background?: string;
+  headline?: string;
+  subtitle?: string;
+  button_label?: string;
+}
+
+/** The row's theme_appearance, keyed by holiday, as saved. */
+export function themeAppearanceOf(config: Config): Record<string, HolidayAppearance> {
+  const out: Record<string, HolidayAppearance> = {};
+  const raw = config.theme_appearance;
+  if (!raw || typeof raw !== "object") return out;
+  for (const [key, entry] of Object.entries(raw as Record<string, unknown>)) {
+    const appearance = appearanceOf(entry);
+    if (appearance) out[key] = appearance;
+  }
+  return out;
+}
+
+/** One appearance, read from stored JSON. Null when it says nothing. */
+export function appearanceOf(value: unknown): HolidayAppearance | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const appearance: HolidayAppearance = {};
+  if (typeof raw.background === "string") appearance.background = raw.background;
+  if (typeof raw.headline === "string") appearance.headline = raw.headline;
+  if (typeof raw.subtitle === "string") appearance.subtitle = raw.subtitle;
+  if (typeof raw.button_label === "string") appearance.button_label = raw.button_label;
+  return hasAppearance(appearance) ? appearance : null;
+}
+
+export function hasAppearance(appearance: HolidayAppearance | null | undefined): boolean {
+  if (!appearance) return false;
+  return Boolean(
+    appearance.background?.trim() ||
+    appearance.headline?.trim() ||
+    appearance.subtitle?.trim() ||
+    appearance.button_label?.trim(),
+  );
+}
+
+/**
+ * The appearance as the row stores it: fields that are blank (ignoring
+ * surrounding whitespace) are left out, and an appearance left with nothing is
+ * dropped entirely, so clearing a holiday removes its entry. Text keeps
+ * whatever was typed — the server trims it when it serves the row, and trimming
+ * here would eat the space between two words as it is typed.
+ */
+export function prunedAppearance(value: HolidayAppearance): HolidayAppearance | undefined {
+  const appearance: HolidayAppearance = {};
+  if (value.background?.trim()) appearance.background = value.background;
+  if (value.headline?.trim()) appearance.headline = value.headline;
+  if (value.subtitle?.trim()) appearance.subtitle = value.subtitle;
+  if (value.button_label?.trim()) appearance.button_label = value.button_label;
+  return hasAppearance(appearance) ? appearance : undefined;
+}
+
+/**
+ * Where an uploaded background is served from. The reference is the hash of the
+ * stored bytes, so the path is its own cache buster and an uploaded image can
+ * be previewed before the row is saved.
+ */
+export function seasonalBackgroundURL(ref: string): string {
+  return `/api/v2/seasonal-backgrounds/${encodeURIComponent(ref)}`;
 }
 
 export function customHolidaysOf(config: Config): CustomHoliday[] {

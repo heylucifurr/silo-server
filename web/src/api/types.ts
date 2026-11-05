@@ -4571,6 +4571,12 @@ export interface ResolvedSectionLayout {
   item_limit: number;
   is_custom: boolean;
   customized: boolean;
+  /**
+   * How a Seasonal Picks row dresses itself on the web home page right now:
+   * present only while one of its holidays is in season and it has an
+   * appearance, and read by nothing else. Devices ignore it.
+   */
+  appearance?: V2Components["schemas"]["SectionAppearance"];
 }
 
 export interface HomeLayoutResponse {

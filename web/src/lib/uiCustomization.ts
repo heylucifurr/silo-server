@@ -281,6 +281,28 @@ export function featuredCarouselCardWidthClasses(size: PosterSize): string {
   }
 }
 
+/**
+ * The Seasonal Picks band's info card — the text block that scrolls with the
+ * row's own cards — is exactly two Featured posters plus the gap between them,
+ * so the block reads as one of the row's items and the first poster lands where
+ * its neighbour would. Only the band draws it, and only from lg up; a phone
+ * stacks the same text above the row instead.
+ *
+ * The gap is MediaCarousel's slideGap ("gap-4 lg:gap-5"), which is why the
+ * width grows by that step and not by the card's. Keep in step with
+ * SEASONAL_INFO_CARD_WIDTH_PX below.
+ */
+export function seasonalInfoCardWidthClasses(size: PosterSize): string {
+  switch (size) {
+    case "compact":
+      return "w-[256px] shrink-0 sm:w-[296px] lg:w-[350px] xl:w-[440px] 2xl:w-[570px]";
+    case "large":
+      return "w-[356px] shrink-0 sm:w-[406px] lg:w-[490px] xl:w-[620px] 2xl:w-[800px]";
+    default:
+      return "w-[296px] shrink-0 sm:w-[336px] lg:w-[420px] xl:w-[540px] 2xl:w-[700px]";
+  }
+}
+
 /** Width classes of wide (16:9) carousel cards such as Continue Watching episodes. */
 export const WIDE_CAROUSEL_CARD_WIDTH_CLASSES = "w-[260px] shrink-0 sm:w-[315px]";
 
@@ -436,6 +458,17 @@ const FEATURED_CAROUSEL_WIDTH_PX: Record<PosterSize, readonly number[]> = {
 const CARD_BREAKPOINT_PX = [0, 640, 1024, 1280, 1536];
 
 /**
+ * The Seasonal Picks info card's widths, one per entry of CARD_BREAKPOINT_PX:
+ * two Featured posters plus the carousel's gap (16px until lg, 20px from it),
+ * written out for the same reason the class string above is.
+ */
+const SEASONAL_INFO_CARD_WIDTH_PX: Record<PosterSize, readonly number[]> = {
+  compact: [256, 296, 350, 440, 570],
+  standard: [296, 336, 420, 540, 700],
+  large: [356, 406, 490, 620, 800],
+};
+
+/**
  * The entry a table picks for a viewport: the last one whose breakpoint it
  * reaches. A table shorter than CARD_BREAKPOINT_PX simply stops growing, which
  * is how an ordinary card keeps its lg width on any larger screen.
@@ -477,6 +510,15 @@ export function carouselCardWidthPx(
           ? FEATURED_CAROUSEL_WIDTH_PX[size]
           : CAROUSEL_CARD_WIDTH_PX[size];
   return widthAt(table, viewportWidth);
+}
+
+/**
+ * The width in pixels the Seasonal Picks band's info card resolves to at a
+ * viewport width. Beside its class string, as the other tables are; nothing
+ * measures a commit with it yet.
+ */
+export function seasonalInfoCardWidthPx(size: PosterSize, viewportWidth: number): number {
+  return widthAt(SEASONAL_INFO_CARD_WIDTH_PX[size], viewportWidth);
 }
 
 /**

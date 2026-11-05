@@ -17,14 +17,19 @@ import {
   type SeasonalVibe,
 } from "@/hooks/queries/seasonalThemes";
 import {
+  appearanceOf,
   customHolidayProblem,
   customHolidaysOf,
+  hasAppearance,
   holidayDatesProblem,
   holidayDatesLabel,
+  themeAppearanceOf,
   themeDatesOf,
   type CustomHoliday,
+  type HolidayAppearance,
   type HolidayDates,
 } from "@/lib/homeRows/seasonal";
+import { SeasonalAppearanceFields } from "./SeasonalAppearanceFields";
 
 type Config = Record<string, unknown>;
 
@@ -216,7 +221,6 @@ function CustomHolidays({ config, onChange, max }: FieldProps & { max: number })
     onChange({ ...config, custom_holidays: next.length > 0 ? next : undefined });
   const update = (index: number, patch: Partial<CustomHoliday>) =>
     commit(holidays.map((holiday, i) => (i === index ? { ...holiday, ...patch } : holiday)));
-
   return (
     <fieldset className="grid gap-2">
       <legend className="mb-1 text-sm font-medium">Your holidays</legend>
@@ -269,6 +273,11 @@ function CustomHolidays({ config, onChange, max }: FieldProps & { max: number })
               value={holiday.list_url}
               onChange={(event) => update(index, { list_url: event.target.value })}
             />
+            <SeasonalAppearanceFields
+              holiday={label}
+              value={appearanceOf(holiday.appearance) ?? {}}
+              onChange={(appearance) => update(index, { appearance })}
+            />
             {problem ? <p className="text-destructive text-xs">{problem}</p> : null}
           </div>
         );
@@ -302,6 +311,7 @@ export function HolidayFields({ config, onChange }: FieldProps) {
   const titles = stringMap(config.theme_titles);
   const vibes = stringMap(config.vibes);
   const dates = themeDatesOf(config);
+  const appearances = themeAppearanceOf(config);
   const hasCustom = customHolidaysOf(config).length > 0;
 
   function commit(
@@ -309,6 +319,7 @@ export function HolidayFields({ config, onChange }: FieldProps) {
     nextTitles: Record<string, string>,
     nextVibes = vibes,
     nextDates = dates,
+    nextAppearances = appearances,
   ) {
     // Keep only titles, vibes and dates for holidays that are on, so the saved config stays tidy.
     const forEnabled = <T,>(entries: Record<string, T>) =>
@@ -325,6 +336,11 @@ export function HolidayFields({ config, onChange }: FieldProps) {
       ),
       vibes: orUndefined(forEnabled(nextVibes)),
       theme_dates: orUndefined(forEnabled(nextDates)),
+      theme_appearance: orUndefined(
+        forEnabled(nextAppearances).filter((entry): entry is [string, HolidayAppearance] =>
+          hasAppearance(entry[1]),
+        ),
+      ),
       // Legacy single-theme keys would shadow the list on the server.
       theme: "",
       mode: "",
@@ -395,6 +411,16 @@ export function HolidayFields({ config, onChange }: FieldProps) {
                         }}
                       />
                     ) : null}
+                    <SeasonalAppearanceFields
+                      holiday={theme.name}
+                      value={appearances[theme.key] ?? {}}
+                      onChange={(next) =>
+                        commit(enabled, titles, vibes, dates, {
+                          ...appearances,
+                          [theme.key]: next ?? {},
+                        })
+                      }
+                    />
                   </div>
                 ) : null}
               </div>
