@@ -32,9 +32,17 @@ export default function MetadataBadges({
   chapterCount,
   status,
 }: MetadataBadgesProps) {
+  // The artboard draws the year and the runtime as plain text beside the chips
+  // rather than as chips of their own.
+  const facts = [year, duration].filter((fact): fact is string => Boolean(fact));
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {year && <span className="metadata-badge">{year}</span>}
+      {facts.length > 0 && (
+        <span className="text-foreground text-[0.9375rem] font-medium">
+          {facts.join(" · ")}
+        </span>
+      )}
       {contentRating && <span className="metadata-badge">{contentRating}</span>}
       {advisoryAge != null && advisoryAge > 0 && (
         <span
@@ -50,7 +58,6 @@ export default function MetadataBadges({
             : `${advisoryAge}+`}
         </span>
       )}
-      {duration && <span className="metadata-badge">{duration}</span>}
       {seasonCount != null && (
         <span className="metadata-badge">
           {seasonCount} {seasonCount === 1 ? "Season" : "Seasons"}

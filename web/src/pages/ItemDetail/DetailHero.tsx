@@ -310,7 +310,11 @@ export default function DetailHero({
                 )}
 
                 <div className="detail-hero-facts">
-                  {metadata && <div className="mb-4">{metadata}</div>}
+                  {/* One row: the year and runtime read as text, the chips
+                      follow. */}
+                  {metadata && (
+                    <div className="mb-4 flex flex-wrap items-center gap-2">{metadata}</div>
+                  )}
                   {scoreRow && <div className="mb-4">{scoreRow}</div>}
                 </div>
 

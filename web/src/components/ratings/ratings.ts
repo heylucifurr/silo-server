@@ -3,9 +3,8 @@ import type { DisplayRating } from "@/api/types";
 export type { DisplayRating };
 
 /**
- * A rating source's brand colour, for the mark Silo draws for it. Silo draws no
- * source artwork — the owners of these scores restrict their logos — so in a row
- * of scores the colour is what tells one source's mark from another's.
+ * A rating source's brand colour: the default accent for its poster-card badge.
+ * The detail hero draws the source's logo instead of a coloured mark.
  */
 export const RATING_SOURCE_ACCENTS = {
   imdb: "#f5c518",
@@ -13,11 +12,6 @@ export const RATING_SOURCE_ACCENTS = {
   rt_critic: "#fa320a",
   rt_audience: "#fa6400",
 } as const;
-
-/** A rating source's brand colour, or undefined for one Silo does not know. */
-export function ratingSourceAccent(source: string): string | undefined {
-  return RATING_SOURCE_ACCENTS[source as keyof typeof RATING_SOURCE_ACCENTS];
-}
 
 function scoreOutOfTen(value: number | null | undefined): value is number {
   return value != null && Number.isFinite(value) && value > 0 && value <= 10;
