@@ -30,7 +30,7 @@ export default function ScoreRow({ ratings, tmdbVoteCount }: ScoreRowProps) {
           }
           className="inline-flex items-center gap-1.5"
         >
-          <RatingEntry rating={rating} />
+          <RatingEntry rating={rating} sourceLogos />
           {rating.source === "tmdb" && tmdbVoteCount ? (
             <span className="text-muted-foreground text-xs tabular-nums">
               {voteCountFormat.format(tmdbVoteCount)} votes
