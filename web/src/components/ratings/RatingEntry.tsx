@@ -18,12 +18,20 @@ const SOURCE_LOGOS: Record<string, string> = {
 };
 
 /**
- * The drawn height of a source's mark. TMDB's wordmark is wide and short, so it
- * sits lower than the square-ish marks beside it.
+ * How tall to draw a source's mark. The files carry different amounts of empty
+ * space in their viewBox — IMDb's box fills about five eighths of its height,
+ * the Rotten Tomatoes icons about three quarters — so these heights leave the
+ * artwork about as tall as the score beside it rather than the box.
  */
+const LOGO_HEIGHT: Record<string, { sm: string; md: string }> = {
+  tmdb: { sm: "h-4", md: "h-6" },
+  imdb: { sm: "h-4", md: "h-6" },
+  rt_critic: { sm: "h-3.5", md: "h-5" },
+  rt_audience: { sm: "h-3.5", md: "h-5" },
+};
+
 function logoHeightClass(source: string, size: "sm" | "md"): string {
-  if (source === "tmdb") return size === "sm" ? "h-2" : "h-2.5";
-  return size === "sm" ? "h-3" : "h-4";
+  return LOGO_HEIGHT[source]?.[size] ?? (size === "sm" ? "h-4" : "h-6");
 }
 
 interface RatingEntryProps {
