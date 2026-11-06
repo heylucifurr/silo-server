@@ -103,13 +103,12 @@ export default function DetailHero({
   const isCompact = variant === "compact";
   const isViewportBounded = variant === "episode" || variant === "series" || variant === "season";
   // Where the poster is hidden it is not rendered either, so its image is never
-  // downloaded. A viewport-bounded hero (episode, series, season) hides it below
-  // lg, where its copy needs the whole column; every other hero hides it from lg
-  // up, where the copy leads and the poster only crowds it. The fallback is the
-  // layout that hero draws its poster in, so an environment without matchMedia
-  // (server rendering, tests) sees the poster exactly as it did before.
-  const wideViewport = useMediaQuery("(min-width: 64rem)", isViewportBounded);
-  const showPoster = !hidePoster && (isViewportBounded ? wideViewport : !wideViewport);
+  // downloaded. Every hero leads with its copy from lg up and draws its poster
+  // below lg only, where the copy has room beneath it; an episode passes
+  // hidePoster and never draws one. The fallback is the narrow layout, which is
+  // where the poster belongs.
+  const wideViewport = useMediaQuery("(min-width: 64rem)", false);
+  const showPoster = !hidePoster && !wideViewport;
 
   const posterSizeClass = (() => {
     switch (posterOrientation) {

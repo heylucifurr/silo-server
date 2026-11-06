@@ -168,39 +168,12 @@
     width: 140px;
   }
 
-  .item-detail-hero:is([data-variant="series"], [data-variant="season"])
-    .detail-hero-primary-content {
-    flex-direction: row;
-    align-items: end;
-    gap: 16px;
-  }
-
-  .item-detail-hero:is([data-variant="series"], [data-variant="season"])
-    .detail-hero-primary-content
-    > .media-card-image {
-    flex-shrink: 0;
-    width: auto;
-    height: min(330px, 100%);
-    aspect-ratio: 2 / 3;
-  }
-
-  .item-detail-hero:is([data-variant="series"], [data-variant="season"])
-    .detail-hero-primary-content
-    > .media-card-image
-    img {
-    height: 100%;
-  }
-
+  /* The poster block and the row layout it needed are gone: a series or season
+     hero hides its poster at every width now — it leads with its copy from lg
+     up, and the viewport-bounded rule hides the poster below lg — so the copy
+     column is the container's only child. */
   .item-detail-hero:is([data-variant="series"], [data-variant="season"]) .detail-hero-copy {
     min-width: 0;
-  }
-
-  @media (max-width: 1023px) {
-    .item-detail-hero:is([data-variant="series"], [data-variant="season"])
-      .detail-hero-primary-content
-      > .media-card-image {
-      height: min(150px, 50%);
-    }
   }
 
   @media (max-height: 650px) {
@@ -590,11 +563,6 @@
         100dvh - var(--detail-header-height, 0px) - var(--detail-player-height) -
           var(--detail-navigation-height)
       );
-    }
-    /* A percentage height has nothing to resolve against in a content-sized
-       hero and would inflate it, so pin the poster to its full size. */
-    .series-detail-viewport .item-detail-hero .detail-hero-primary-content > .media-card-image {
-      height: 330px;
     }
     .series-detail-viewport > .series-detail-navigation,
     .episode-detail-viewport > .episode-detail-navigation {

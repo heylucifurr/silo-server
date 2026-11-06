@@ -7,12 +7,11 @@ import {
 
 interface ItemDetailSkeletonProps {
   /**
-   * Which poster box the hero will draw, so the placeholder reserves the same
-   * one. A viewport-bounded hero (episode, series, season) draws its poster
-   * from lg up, every other hero only below lg, and an episode draws none.
-   * Defaults to the leaf-detail case, which is what most pages are.
+   * Whether the hero draws a poster box at all, so the placeholder reserves the
+   * same one. Every hero draws its poster below lg only, except an episode,
+   * which draws none.
    */
-  posterBox?: "none" | "below-lg" | "from-lg";
+  posterBox?: "none" | "below-lg";
 }
 
 /** Holds the detail page layout while an item or title loads. */
@@ -27,11 +26,7 @@ export default function ItemDetailSkeleton({ posterBox = "below-lg" }: ItemDetai
         <div className="page-shell-wide relative flex min-h-[60dvh] flex-col justify-end pt-28 pb-8 lg:min-h-[72dvh]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end">
             {posterBox !== "none" && (
-              <Skeleton
-                className={`aspect-[2/3] w-[170px] flex-shrink-0 rounded-lg sm:w-[220px] ${
-                  posterBox === "below-lg" ? "lg:hidden" : "max-lg:hidden"
-                }`}
-              />
+              <Skeleton className="aspect-[2/3] w-[170px] flex-shrink-0 rounded-lg sm:w-[220px] lg:hidden" />
             )}
 
             <div className="max-w-3xl flex-1 space-y-4">
