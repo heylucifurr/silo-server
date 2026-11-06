@@ -102,10 +102,14 @@ export default function DetailHero({
   const posterPlaceholder = posterThumbhash ? decodeThumbhash(posterThumbhash) : "";
   const isCompact = variant === "compact";
   const isViewportBounded = variant === "episode" || variant === "series" || variant === "season";
-  // Below lg a viewport-bounded hero hides its poster (detailLayout.css), so
-  // it is not rendered there and its image is never downloaded.
-  const wideViewport = useMediaQuery("(min-width: 64rem)", true);
-  const showPoster = !hidePoster && (!isViewportBounded || wideViewport);
+  // Where the poster is hidden it is not rendered either, so its image is never
+  // downloaded. A viewport-bounded hero (episode, series, season) hides it below
+  // lg, where its copy needs the whole column; every other hero hides it from lg
+  // up, where the copy leads and the poster only crowds it. The fallback is the
+  // layout that hero draws its poster in, so an environment without matchMedia
+  // (server rendering, tests) sees the poster exactly as it did before.
+  const wideViewport = useMediaQuery("(min-width: 64rem)", isViewportBounded);
+  const showPoster = !hidePoster && (isViewportBounded ? wideViewport : !wideViewport);
 
   const posterSizeClass = (() => {
     switch (posterOrientation) {
@@ -195,7 +199,7 @@ export default function DetailHero({
           }`}
         >
           <div
-            className={`detail-hero-primary-content flex flex-col gap-6 ${!hidePoster ? "lg:flex-row lg:items-end" : ""}`}
+            className={`detail-hero-primary-content flex flex-col gap-6 ${showPoster ? "lg:flex-row lg:items-end" : ""}`}
           >
             {/* Poster */}
             {showPoster && (
@@ -296,19 +300,12 @@ export default function DetailHero({
                   />
                 )}
 
-                {/* Tagline (italic) — falls back to subtitle */}
-                {(tagline || subtitle) && (
-                  <div
-                    className={`text-muted-foreground mb-4 text-[0.8125rem] ${
-                      tagline
-                        ? "text-foreground/72 italic"
-                        : "text-muted-foreground text-base font-medium not-italic"
-                    }`}
-                  >
-                    {tagline || subtitle}
-                    {tagline && taglineMachineTranslated && (
-                      <MachineTranslatedLabel compact className="ml-1.5 align-middle not-italic" />
-                    )}
+                {/* Subtitle — what a tagline stands in for on the pages that
+                    have one: an audiobook's author and narrator, a season's
+                    label. It names the work, so it stays with the title. */}
+                {!tagline && subtitle && (
+                  <div className="text-muted-foreground mb-4 text-base font-medium">
+                    {subtitle}
                   </div>
                 )}
 
@@ -316,6 +313,17 @@ export default function DetailHero({
                   {metadata && <div className="mb-4">{metadata}</div>}
                   {scoreRow && <div className="mb-4">{scoreRow}</div>}
                 </div>
+
+                {/* The tagline is a logline for the synopsis below it, so it sits
+                    with the overview rather than under the title. */}
+                {tagline && (
+                  <div className="text-foreground mb-3 text-lg leading-snug font-bold">
+                    {tagline}
+                    {taglineMachineTranslated && (
+                      <MachineTranslatedLabel compact className="ml-1.5 align-middle" />
+                    )}
+                  </div>
+                )}
 
                 {overview && (
                   <DetailOverview

@@ -1,4 +1,8 @@
-import { formatOutOfTen, formatPercent } from "@/components/ratings/ratings";
+import {
+  formatOutOfTen,
+  formatPercent,
+  RATING_SOURCE_ACCENTS,
+} from "@/components/ratings/ratings";
 
 import type { OverlayDef } from "../types";
 
@@ -19,7 +23,7 @@ export const RATINGS_OVERLAYS: readonly OverlayDef[] = [
     description: "IMDb score out of 10",
     defaultPosition: "top-right",
     defaultEnabled: false,
-    defaultAccent: "#f5c518",
+    defaultAccent: RATING_SOURCE_ACCENTS.imdb,
     iconCapable: false,
     getValue: (d) => ratingLabel("IMDb", d.rating_imdb, 10),
   },
@@ -30,7 +34,7 @@ export const RATINGS_OVERLAYS: readonly OverlayDef[] = [
     description: "TMDB score out of 10",
     defaultPosition: "top-right",
     defaultEnabled: false,
-    defaultAccent: "#01b4e4",
+    defaultAccent: RATING_SOURCE_ACCENTS.tmdb,
     iconCapable: false,
     getValue: (d) => ratingLabel("TMDB", d.rating_tmdb, 10),
   },
@@ -41,7 +45,7 @@ export const RATINGS_OVERLAYS: readonly OverlayDef[] = [
     description: "Rotten Tomatoes critic score, when an administrator shows it",
     defaultPosition: "top-right",
     defaultEnabled: false,
-    defaultAccent: "#fa320a",
+    defaultAccent: RATING_SOURCE_ACCENTS.rt_critic,
     iconCapable: false,
     ratingSource: "rt_critic",
     getValue: (d) => ratingLabel("RT", d.rating_rt_critic, 100),
@@ -53,7 +57,7 @@ export const RATINGS_OVERLAYS: readonly OverlayDef[] = [
     description: "Rotten Tomatoes audience score, when an administrator shows it",
     defaultPosition: "top-right",
     defaultEnabled: false,
-    defaultAccent: "#fa6400",
+    defaultAccent: RATING_SOURCE_ACCENTS.rt_audience,
     iconCapable: false,
     ratingSource: "rt_audience",
     getValue: (d) => ratingLabel("RT Audience", d.rating_rt_audience, 100),

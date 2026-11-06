@@ -1184,21 +1184,17 @@ export default function ActionBar({
         {watchedLabel && onToggleWatched && (
           <Button
             variant="glass"
+            size="icon-lg"
             onClick={onToggleWatched}
             disabled={isUpdatingWatched}
-            className={`${responsivePrimaryActionClass} h-11 min-w-[161px] rounded-full px-5 text-[0.875rem] font-semibold enabled:cursor-pointer`}
+            title={watchedLabel}
+            aria-label={watchedLabel}
+            aria-pressed={isWatched}
+            className={`${staticGlassActionClass} size-11 cursor-pointer rounded-full ${
+              isWatched ? "text-success" : ""
+            }`}
           >
             <Check className="size-[18px]" />
-            {compactMobile ? (
-              <>
-                <span className="detail-full-label">{watchedLabel}</span>
-                <span className="detail-short-label">
-                  {isWatched ? "Mark Unwatched" : "Mark Watched"}
-                </span>
-              </>
-            ) : (
-              watchedLabel
-            )}
           </Button>
         )}
 

@@ -18,7 +18,7 @@ export default function DetailLayout({ hero, children, overlays }: DetailLayoutP
   return (
     <div>
       {hero}
-      <div className="page-shell detail-supporting-content space-y-12 py-10 sm:space-y-14">
+      <div className="page-shell-wide detail-supporting-content space-y-12 py-10 sm:space-y-14">
         {children}
       </div>
       {overlays}

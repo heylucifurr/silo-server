@@ -16,6 +16,20 @@ interface DetailOverviewProps {
   onReveal?: () => void;
 }
 
+/**
+ * The hero shows a summary, not the whole synopsis: a long overview pushes the
+ * facts and the Play row past the fold. Thirty words is about the length a
+ * viewer reads before deciding.
+ */
+const OVERVIEW_WORD_LIMIT = 30;
+
+/** Trims to `limit` words, marking the cut with an ellipsis. */
+function summarizeOverview(overview: string, limit: number): string {
+  const words = overview.trim().split(/\s+/);
+  if (words.length <= limit) return overview;
+  return `${words.slice(0, limit).join(" ")}…`;
+}
+
 export default function DetailOverview({
   overview,
   compact = false,
@@ -29,6 +43,7 @@ export default function DetailOverview({
   const textRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
+  const summary = summarizeOverview(overview, OVERVIEW_WORD_LIMIT);
 
   // Only offer "More" when the clamp actually hides text; re-check on resize
   // because the line count depends on the column width.
@@ -62,13 +77,13 @@ export default function DetailOverview({
     <div className="detail-hero-description max-w-2xl">
       <p
         ref={textRef}
-        className={`text-muted-foreground leading-7 ${
+        className={`text-muted-foreground leading-[1.125rem] lg:leading-7 ${
           compact ? "text-sm" : "text-foreground/72 text-sm sm:text-[0.9375rem]"
         } ${clamp && !expanded ? "line-clamp-3" : ""} ${
           translating ? "animate-pulse opacity-50" : ""
         }`}
       >
-        {overview}
+        {summary}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {clamp && (overflowing || expanded) && (

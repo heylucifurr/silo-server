@@ -15,10 +15,10 @@ export default function QualityBadges({ summary }: QualityBadgesProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {badges.map((label) => (
-        <span
-          key={label}
-          className="bg-primary/10 text-primary border-primary/20 inline-flex items-center rounded-sm border px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide uppercase"
-        >
+        // The pill the year, rating and runtime badges draw, in the accent: one
+        // row of badges, one shape. Poster-card labels are another component
+        // (lib/overlays) and keep their own treatment.
+        <span key={label} className="metadata-badge border-primary/25 bg-primary/10 text-primary">
           {label}
         </span>
       ))}
