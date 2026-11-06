@@ -393,12 +393,12 @@
 
 @layer utilities {
   /* The hero's fact chips. The base .metadata-badge is a filled, uppercase
-     pill; this row is a hairline outline with no fill, in the label's own case
+     pill; this row is a 2px outline with no fill, in the label's own case
      ("Dolby Vision", not "DOLBY VISION"), so the year and runtime can read as
      plain text beside it. */
   .detail-hero-facts .metadata-badge {
     border-radius: 0.375rem;
-    border: 1px solid color-mix(in srgb, var(--foreground) 30%, transparent);
+    border: 2px solid color-mix(in srgb, var(--foreground) 30%, transparent);
     background-color: transparent;
     padding: 0.25rem 0.625rem;
     font-size: 0.9375rem;
