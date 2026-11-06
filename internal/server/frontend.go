@@ -25,14 +25,23 @@ var WebDistFS fs.FS
 // to the SPA shell. When nil, the frontend is served exactly as built.
 var Branding *branding.Service
 
+// installGuideRedirects sends the bare (no trailing slash) form of the two
+// external app-install landing pages to their trailing-slash URL. Serving
+// the page at a slash-less path would resolve the document's own relative
+// asset links (android/index.html's img/appicon.png) against "/" instead of
+// "/android/", since the last path segment has nothing after it to mark it
+// as a directory — breaking any relative link the page happens to use.
+var installGuideRedirects = map[string]string{
+	"/apple":   "/apple/",
+	"/android": "/android/",
+}
+
 // installGuidePages maps the two external app-install landing pages to
 // their index.html under the embedded build. They are served exactly as
 // built, bypassing the SPA fallback, so a link opened outside the app (an
 // email, a QR code) gets the real document instead of the empty app shell.
 var installGuidePages = map[string]string{
-	"/apple":    "apple/index.html",
 	"/apple/":   "apple/index.html",
-	"/android":  "android/index.html",
 	"/android/": "android/index.html",
 }
 
@@ -126,6 +135,10 @@ type renderedShell struct {
 func (h *frontendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	path := r.URL.Path
+	if target, ok := installGuideRedirects[path]; ok {
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
 	if assetPath, ok := installGuidePages[path]; ok {
 		if data, err := fs.ReadFile(WebDistFS, assetPath); err == nil {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
