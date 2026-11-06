@@ -5,8 +5,18 @@ import {
   RecommendationGridSkeleton,
 } from "./components/SectionSkeletons";
 
+interface ItemDetailSkeletonProps {
+  /**
+   * Which poster box the hero will draw, so the placeholder reserves the same
+   * one. A viewport-bounded hero (episode, series, season) draws its poster
+   * from lg up, every other hero only below lg, and an episode draws none.
+   * Defaults to the leaf-detail case, which is what most pages are.
+   */
+  posterBox?: "none" | "below-lg" | "from-lg";
+}
+
 /** Holds the detail page layout while an item or title loads. */
-export default function ItemDetailSkeleton() {
+export default function ItemDetailSkeleton({ posterBox = "below-lg" }: ItemDetailSkeletonProps) {
   return (
     <div>
       {/* Hero skeleton */}
@@ -16,7 +26,13 @@ export default function ItemDetailSkeleton() {
 
         <div className="page-shell-wide relative flex min-h-[60dvh] flex-col justify-end pt-28 pb-8 lg:min-h-[72dvh]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end">
-            <Skeleton className="aspect-[2/3] w-[170px] flex-shrink-0 rounded-lg sm:w-[220px]" />
+            {posterBox !== "none" && (
+              <Skeleton
+                className={`aspect-[2/3] w-[170px] flex-shrink-0 rounded-lg sm:w-[220px] ${
+                  posterBox === "below-lg" ? "lg:hidden" : "max-lg:hidden"
+                }`}
+              />
+            )}
 
             <div className="max-w-3xl flex-1 space-y-4">
               <Skeleton className="h-4 w-16" />
@@ -47,8 +63,9 @@ export default function ItemDetailSkeleton() {
         </div>
       </section>
 
-      {/* Below-fold section skeletons */}
-      <div className="page-shell space-y-12 py-10 sm:space-y-14">
+      {/* Below-fold section skeletons. The shell matches DetailLayout's, so the
+          sections do not shift sideways when the real page arrives. */}
+      <div className="page-shell-wide space-y-12 py-10 sm:space-y-14">
         <CastSkeleton />
         <CrewSkeleton />
         <RecommendationGridSkeleton />

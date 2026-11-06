@@ -26,11 +26,24 @@ import { parseOptionalLibraryId } from "@/components/sidebarItemNavigation";
 import { useShowAdvisoryAge } from "@/hooks/useShowAdvisoryAge";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
 
+/** A hero that owns its viewport: episode, series and season. */
+function isViewportBoundedType(type: ItemDetail["type"] | undefined): boolean {
+  return type === "episode" || type === "series" || type === "season";
+}
+
+/** Which poster box the hero will draw for this item, for its placeholder. */
+function skeletonPosterBox(item: ItemDetail | undefined): "none" | "below-lg" | "from-lg" {
+  if (item?.type === "episode") return "none";
+  return isViewportBoundedType(item?.type) ? "from-lg" : "below-lg";
+}
+
 interface HomeItemTransitionShape {
   compact: boolean;
   hidePoster: boolean;
   squarePoster: boolean;
   hasLogo: boolean;
+  /** A hero that owns its viewport (episode, series, season). */
+  viewportBounded: boolean;
 }
 
 const NEUTRAL_HOME_ITEM_TRANSITION_SHAPE: HomeItemTransitionShape = {
@@ -38,6 +51,7 @@ const NEUTRAL_HOME_ITEM_TRANSITION_SHAPE: HomeItemTransitionShape = {
   hidePoster: false,
   squarePoster: false,
   hasLogo: false,
+  viewportBounded: false,
 };
 
 function getHomeItemTransitionShape(
@@ -52,13 +66,17 @@ function getHomeItemTransitionShape(
     squarePoster: item.type === "audiobook",
     // An unknown choice reserves the logo box, as the hero itself does.
     hasLogo: showTitleArt !== false && Boolean(item.logo_url),
+    viewportBounded: isViewportBoundedType(item.type),
   };
 }
 
 function HomeItemTransitionShell({ item }: { item?: ItemDetail }) {
   const showTitleArt = useShowTitleArt();
   const [shape] = useState(() => getHomeItemTransitionShape(item, showTitleArt));
-  const { compact, hidePoster, squarePoster, hasLogo } = shape;
+  const { compact, hidePoster, squarePoster, hasLogo, viewportBounded } = shape;
+  // The placeholder reserves the box the hero will draw in: a viewport-bounded
+  // hero shows its poster only from lg up, every other one only below lg.
+  const posterVisibilityClass = viewportBounded ? "max-lg:hidden" : "lg:hidden";
 
   return (
     <div
@@ -79,7 +97,7 @@ function HomeItemTransitionShell({ item }: { item?: ItemDetail }) {
             {!hidePoster && (
               <div
                 data-testid="home-item-transition-poster"
-                className={`home-item-transition-block flex-shrink-0 rounded-lg border border-solid shadow-[var(--shadow-md)] ${
+                className={`home-item-transition-block flex-shrink-0 rounded-lg border border-solid shadow-[var(--shadow-md)] ${posterVisibilityClass} ${
                   squarePoster
                     ? compact
                       ? "aspect-square w-[180px] sm:w-[200px]"
@@ -189,7 +207,7 @@ export default function ItemDetail() {
     if (enteredItemFromHome) {
       return <HomeItemTransitionShell key={id} item={item} />;
     }
-    return <ItemDetailSkeleton />;
+    return <ItemDetailSkeleton posterBox={skeletonPosterBox(item)} />;
   }
 
   if (!item) {
