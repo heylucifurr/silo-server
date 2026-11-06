@@ -222,14 +222,17 @@ function StepBody({ step }: { step: OnboardingStep }) {
  * links fall back to a plain external-link button.
  */
 function StoreLink({ link }: { link: OnboardingStepLink }) {
-  const brand = link.url.includes("apple.com")
-    ? {
-        Icon: AppleLogo,
-        eyebrow: link.url.includes("testflight") ? "TestFlight beta" : "App Store",
-      }
-    : link.url.includes("play.google.com")
-      ? { Icon: GooglePlayLogo, eyebrow: "Google Play" }
-      : null;
+  const brand =
+    link.url.includes("weflix.me/apple") || link.url.includes("apple.com")
+      ? {
+          Icon: AppleLogo,
+          eyebrow: link.url.includes("testflight") || link.url.includes("weflix.me/apple")
+            ? "TestFlight beta"
+            : "App Store",
+        }
+      : link.url.includes("weflix.me/android") || link.url.includes("play.google.com")
+        ? { Icon: GooglePlayLogo, eyebrow: link.url.includes("weflix.me") ? "Direct download" : "Google Play" }
+        : null;
 
   if (!brand) {
     return (
