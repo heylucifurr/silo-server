@@ -25,6 +25,17 @@ var WebDistFS fs.FS
 // to the SPA shell. When nil, the frontend is served exactly as built.
 var Branding *branding.Service
 
+// installGuidePages maps the two external app-install landing pages to
+// their index.html under the embedded build. They are served exactly as
+// built, bypassing the SPA fallback, so a link opened outside the app (an
+// email, a QR code) gets the real document instead of the empty app shell.
+var installGuidePages = map[string]string{
+	"/apple":    "apple/index.html",
+	"/apple/":   "apple/index.html",
+	"/android":  "android/index.html",
+	"/android/": "android/index.html",
+}
+
 // frontendContentSecurityPolicy is served with every SPA HTML response.
 //
 // SECURITY: this policy is the primary mitigation for malicious ebook content.
@@ -115,6 +126,14 @@ type renderedShell struct {
 func (h *frontendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	path := r.URL.Path
+	if assetPath, ok := installGuidePages[path]; ok {
+		if data, err := fs.ReadFile(WebDistFS, assetPath); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(data))
+			return
+		}
+	}
 	if strings.HasPrefix(path, "/assets/") && isPrecompressedAssetPath(path) {
 		// Sidecars are implementation details selected through content
 		// negotiation. Serving them directly exposes the compressed bytes without

@@ -3800,6 +3800,10 @@ func main() {
 	}
 	deps.FrontendFS = distFS
 	server.WebDistFS = distFS
+	server.DownloadsDir = os.Getenv("APK_DOWNLOADS_DIR")
+	if server.DownloadsDir == "" {
+		server.DownloadsDir = "/downloads"
+	}
 
 	// Expose the branding service (constructed before the task manager) to the
 	// API and the frontend handler.

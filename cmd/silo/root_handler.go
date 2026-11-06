@@ -46,5 +46,6 @@ func newRootMux(apiRouter http.Handler) *http.ServeMux {
 	mux.Handle("/metrics", http.NotFoundHandler())
 	mux.Handle("/api/", apiRouter)
 	mux.Handle("/", server.FrontendHandler())
+	mux.Handle("/downloads/{slug}", server.DownloadsHandler())
 	return mux
 }
