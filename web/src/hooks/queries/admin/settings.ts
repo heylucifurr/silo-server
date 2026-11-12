@@ -28,7 +28,7 @@ import type {
 } from "@/api/types";
 import { adminKeys, compatKeys, settingsKeys, themeKeys } from "../keys";
 import { invalidateAdminDefaultQueries } from "../settingValues";
-import { adminDefaultSettingFor } from "@/lib/settingsAdminDefaults";
+import { adminOverrideSettingFor } from "@/lib/settingsAdminDefaults";
 import { toast } from "sonner";
 
 /**
@@ -52,7 +52,7 @@ function invalidateAdminDefaults(
   serverSettingKeys: string[],
 ) {
   return serverSettingKeys.flatMap((serverSettingKey) => {
-    const key = adminDefaultSettingFor(serverSettingKey);
+    const key = adminOverrideSettingFor(serverSettingKey);
     return key ? [invalidateAdminDefaultQueries(queryClient, key)] : [];
   });
 }

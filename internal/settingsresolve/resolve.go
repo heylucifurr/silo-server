@@ -101,9 +101,9 @@ type Store interface {
 	) ([]userstore.SettingValue, error)
 }
 
-// ServerSettings is the read surface for administrator defaults. It is
-// satisfied by the server settings repositories and by a fake in tests. A key
-// without a value reads as "".
+// ServerSettings is the read surface for administrator defaults and locks. It
+// is satisfied by the server settings repositories and by a fake in tests. A
+// key without a value reads as "".
 type ServerSettings interface {
 	Get(ctx context.Context, key string) (string, error)
 }
@@ -111,8 +111,9 @@ type ServerSettings interface {
 // Resolver resolves against one contract.
 type Resolver struct {
 	contract *settingscontract.Manifest
-	// serverSettings holds administrator defaults for definitions that declare
-	// admin_default. Nil resolves every default from the contract.
+	// serverSettings holds administrator defaults and locks for definitions
+	// that declare admin_default or admin_lock. Nil resolves every default from
+	// the contract and applies no lock.
 	serverSettings ServerSettings
 }
 
@@ -122,7 +123,8 @@ func New(contract *settingscontract.Manifest) *Resolver {
 }
 
 // WithAdminDefaults returns a Resolver that lets the administrator's defaults
-// stand in for default_value on definitions declaring admin_default. Only
+// stand in for default_value on definitions declaring admin_default, and
+// applies the administrator's locks on definitions declaring admin_lock. Only
 // those definitions cost a read, and only when one of them is requested.
 func (r *Resolver) WithAdminDefaults(settings ServerSettings) *Resolver {
 	return &Resolver{contract: r.contract, serverSettings: settings}
@@ -162,7 +164,7 @@ func (r *Resolver) Resolve(
 		return nil, fmt.Errorf("settingsresolve: reading candidates: %w", err)
 	}
 
-	return r.rank(known, defs, stored, r.adminDefaults(ctx, known, defs), rc, constraints), nil
+	return r.rank(known, defs, stored, r.adminValues(ctx, known, defs), rc, constraints), nil
 }
 
 // ResolveContexts resolves the same keys for several content contexts using
@@ -210,10 +212,10 @@ func (r *Resolver) ResolveContexts(
 		return nil, fmt.Errorf("settingsresolve: reading candidates: %w", err)
 	}
 
-	defaults := r.adminDefaults(ctx, known, defs)
+	admin := r.adminValues(ctx, known, defs)
 	out := make([][]Effective, len(contexts))
 	for i, rc := range contexts {
-		out[i] = r.rank(known, defs, stored, defaults, rc, constraints)
+		out[i] = r.rank(known, defs, stored, admin, rc, constraints)
 	}
 	return out, nil
 }
@@ -257,13 +259,13 @@ func (r *Resolver) ResolveProfiles(
 		return nil, fmt.Errorf("settingsresolve: reading candidates: %w", err)
 	}
 
-	defaults := r.adminDefaults(ctx, known, defs)
+	admin := r.adminValues(ctx, known, defs)
 	out := make(map[string][]Effective, len(profileIDs))
 	for _, profileID := range profileIDs {
 		if _, seen := out[profileID]; seen {
 			continue
 		}
-		out[profileID] = r.rank(known, defs, stored, defaults, Context{ProfileID: profileID}, constraints)
+		out[profileID] = r.rank(known, defs, stored, admin, Context{ProfileID: profileID}, constraints)
 	}
 	return out, nil
 }
@@ -289,14 +291,41 @@ func (r *Resolver) knownKeys(keys []string) ([]string, map[string]*settingscontr
 	return known, defs
 }
 
-// adminDefaults reads the administrator's defaults for the requested keys that
-// declare admin_default. A failed read or a stored value the definition no
-// longer accepts falls back to default_value: a default is a starting look,
-// and a settings read must not fail over one.
-func (r *Resolver) adminDefaults(
+// adminValues holds the administrator's overrides for the requested keys:
+// replacement defaults and forced values. A key absent from a map has none.
+type adminValues struct {
+	defaults map[string]json.RawMessage
+	locks    map[string]json.RawMessage
+}
+
+// adminValues reads the administrator's defaults and locks for the requested
+// keys that declare admin_default or admin_lock.
+func (r *Resolver) adminValues(
 	ctx context.Context,
 	known []string,
 	defs map[string]*settingscontract.Definition,
+) adminValues {
+	return adminValues{
+		defaults: r.readAdmin(ctx, known, defs, "default",
+			func(def *settingscontract.Definition) bool { return def.AdminDefault },
+			settingscontract.AdminDefaultSettingKey),
+		locks: r.readAdmin(ctx, known, defs, "lock",
+			func(def *settingscontract.Definition) bool { return def.AdminLock },
+			settingscontract.AdminLockSettingKey),
+	}
+}
+
+// readAdmin reads one kind of administrator value for the requested keys whose
+// definition declares it. A failed read or a stored value the definition no
+// longer accepts is skipped: the contract default applies, or the viewer keeps
+// their own choice. A settings read must not fail over either.
+func (r *Resolver) readAdmin(
+	ctx context.Context,
+	known []string,
+	defs map[string]*settingscontract.Definition,
+	kind string,
+	declares func(*settingscontract.Definition) bool,
+	serverKey func(string) string,
 ) map[string]json.RawMessage {
 	if r.serverSettings == nil {
 		return nil
@@ -304,12 +333,12 @@ func (r *Resolver) adminDefaults(
 	var out map[string]json.RawMessage
 	for _, key := range known {
 		def := defs[key]
-		if !def.AdminDefault {
+		if !declares(def) {
 			continue
 		}
-		value, err := r.serverSettings.Get(ctx, settingscontract.AdminDefaultSettingKey(key))
+		value, err := r.serverSettings.Get(ctx, serverKey(key))
 		if err != nil {
-			slog.WarnContext(ctx, "using the contract default: reading the administrator default failed",
+			slog.WarnContext(ctx, "ignoring the administrator "+kind+": reading it failed",
 				"component", "settingsresolve", "key", key, "error", err)
 			continue
 		}
@@ -318,7 +347,7 @@ func (r *Resolver) adminDefaults(
 			continue
 		}
 		if err := def.ValueSchema.ValidateValue(raw, settingscontract.ObjectSchemas()); err != nil {
-			slog.WarnContext(ctx, "using the contract default: the administrator default is invalid",
+			slog.WarnContext(ctx, "ignoring the administrator "+kind+": the stored value is invalid",
 				"component", "settingsresolve", "key", key, "error", err)
 			continue
 		}
@@ -332,13 +361,13 @@ func (r *Resolver) adminDefaults(
 
 // rank turns one candidate set into one context's effective values. Candidates
 // that belong to another profile are filtered by pickForScope, which is what
-// lets a batched read serve several profiles from the same rows. adminDefaults
-// replaces default_value for the keys it names.
+// lets a batched read serve several profiles from the same rows. admin
+// replaces default_value and forces values for the keys it names.
 func (r *Resolver) rank(
 	known []string,
 	defs map[string]*settingscontract.Definition,
 	stored []userstore.SettingValue,
-	adminDefaults map[string]json.RawMessage,
+	admin adminValues,
 	rc Context,
 	constraints Constraints,
 ) []Effective {
@@ -349,7 +378,11 @@ func (r *Resolver) rank(
 
 	out := make([]Effective, 0, len(known))
 	for _, key := range known {
-		out = append(out, r.resolveOne(defs[key], byKey[key], adminDefaults[key], rc, constraints))
+		eff := r.resolveOne(defs[key], byKey[key], admin.defaults[key], rc, constraints)
+		if lock, ok := admin.locks[key]; ok {
+			eff = applyAdminLock(eff, lock)
+		}
+		out = append(out, eff)
 	}
 	return out
 }
@@ -498,6 +531,28 @@ func applyConstraint(
 	eff.Value = narrow
 	eff.Constrained = true
 	eff.ConstraintKind = def.ConstrainedBy.Constraint
+	return eff
+}
+
+// applyAdminLock replaces the effective value with the one the administrator
+// forces, reporting it as a locked constraint. Like any constraint it keeps
+// the viewer's own value as the requested one, so lifting the lock restores
+// it. This is the single place a lock takes effect: every client reads the
+// effective value rather than deciding for itself.
+func applyAdminLock(eff Effective, lock json.RawMessage) Effective {
+	eff.ConstrainedBy = &settingscontract.Constraint{
+		PolicyInput: settingscontract.PolicyInputAdminLock,
+		Constraint:  settingscontract.ConstraintLocked,
+	}
+	eff.PermittedValues = []json.RawMessage{append(json.RawMessage(nil), lock...)}
+	if bytes.Equal(bytes.TrimSpace(eff.Value), bytes.TrimSpace(lock)) {
+		return eff
+	}
+	eff.StoredValue = eff.Value
+	eff.RequestedValue = eff.Value
+	eff.Value = append(json.RawMessage(nil), lock...)
+	eff.Constrained = true
+	eff.ConstraintKind = settingscontract.ConstraintLocked
 	return eff
 }
 

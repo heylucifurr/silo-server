@@ -33,6 +33,8 @@ func TestPresentationMetadataIsGeneratedForEveryClientLanguage(t *testing.T) {
 				// The device settings screen names an inherited value a server
 				// default rather than an app default when an admin can set it.
 				`adminDefault: true`,
+				// The profile settings show an admin-locked switch disabled.
+				`adminLock: true`,
 			},
 		},
 		{

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Lock } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page/PageHeader";
@@ -11,6 +12,7 @@ import {
   useEffectiveSettings,
   useSettingsCapabilities,
 } from "@/hooks/queries/settingValues";
+import { isAdminLocked } from "@/lib/settingsAdminDefaults";
 import { SETTING_DEFINITIONS, SETTING_KEYS, type SettingKey } from "@/lib/settingsContract";
 
 import { TitleArtSettingsGroup } from "./TitleArtSettingsGroup";
@@ -59,23 +61,36 @@ export default function TitlePagesSettings() {
   const read = (key: SettingKey) =>
     (effective?.[key]?.value ?? SETTING_DEFINITIONS[key].defaultValue) as boolean;
 
-  const switchRow = (key: SettingKey, description = SETTING_DEFINITIONS[key].description) => (
-    <SettingRow
-      key={key}
-      label={SETTING_DEFINITIONS[key].label}
-      description={description}
-      control={(id) => (
-        <Switch
-          id={id}
-          checked={read(key)}
-          disabled={disabled}
-          onCheckedChange={(value) =>
-            save(key, value).catch(() => toast.error("Failed to save title page setting"))
-          }
-        />
-      )}
-    />
-  );
+  const switchRow = (key: SettingKey, description = SETTING_DEFINITIONS[key].description) => {
+    // A switch the server administrator forced shows the forced value, which
+    // is what the effective read already returns, and cannot be changed here.
+    const locked = isAdminLocked(effective?.[key]);
+    return (
+      <SettingRow
+        key={key}
+        label={SETTING_DEFINITIONS[key].label}
+        description={description}
+        note={
+          locked ? (
+            <p className="text-muted-foreground inline-flex items-center gap-1.5 text-[13px] leading-relaxed">
+              <Lock className="size-3 shrink-0" aria-hidden="true" />
+              Set by your server admin
+            </p>
+          ) : null
+        }
+        control={(id) => (
+          <Switch
+            id={id}
+            checked={read(key)}
+            disabled={disabled || locked}
+            onCheckedChange={(value) =>
+              save(key, value).catch(() => toast.error("Failed to save title page setting"))
+            }
+          />
+        )}
+      />
+    );
+  };
 
   return (
     <div className="space-y-6">

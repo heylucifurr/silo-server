@@ -9,7 +9,7 @@
  */
 
 export const SETTINGS_API_VERSION = 1;
-export const SETTINGS_REVISION = 25;
+export const SETTINGS_REVISION = 26;
 
 export interface SettingSuggestedOption {
   value: string;
@@ -359,6 +359,9 @@ export interface SettingDefinition {
   /** The server administrator may replace defaultValue for the whole server,
    * so a value with source "default" can differ from it. */
   adminDefault?: boolean;
+  /** The server administrator may force one value on every viewer; the
+   * effective answer then reports constrained_by.policy_input "admin_lock". */
+  adminLock?: boolean;
   label: string;
   description: string;
   category: string;
@@ -400,6 +403,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     scopeIntroducedIn: [17],
     resolutionOrder: ["profile", "default"],
     defaultValue: false,
+    adminLock: true,
     label: "Blur unwatched episode images",
     description:
       "Blur an episode's thumbnail until you start watching it, so the image does not give away the story.",
@@ -417,6 +421,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     scopeIntroducedIn: [17],
     resolutionOrder: ["profile", "default"],
     defaultValue: false,
+    adminLock: true,
     label: "Hide unwatched episode descriptions",
     description: "Hide an episode's description until you start watching it.",
     category: "catalog",

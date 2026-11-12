@@ -1,6 +1,6 @@
 {
   "api_version": 1,
-  "revision": 25,
+  "revision": 26,
   "option_sets": {
     "playback_audio_languages": {
       "type": "language_tag",
@@ -789,7 +789,8 @@
       "label": "Blur unwatched episode images",
       "description": "Blur an episode's thumbnail until you start watching it, so the image does not give away the story.",
       "recommended_control": "switch",
-      "notes": "Clients apply this; the server never changes catalog responses, so cached catalog data stays shared across profiles. An episode counts as unwatched while it is neither played nor in progress (user_data.played is false and it has no saved position). Covers episode stills wherever a client shows one for a specific episode: season episode lists, other-episodes rows, Next Up and Continue Watching cards, and the next-episode screen in the player. Series and season artwork is not affected. Profile scope so the choice follows the viewer across devices; default false because most viewers expect to see episode stills."
+      "admin_lock": true,
+      "notes": "Clients apply this; the server never changes catalog responses, so cached catalog data stays shared across profiles. An episode counts as unwatched while it is neither played nor in progress (user_data.played is false and it has no saved position). Covers episode stills wherever a client shows one for a specific episode: season episode lists, other-episodes rows, Next Up and Continue Watching cards, and the next-episode screen in the player. Series and season artwork is not affected. Profile scope so the choice follows the viewer across devices; default false because most viewers expect to see episode stills. Revision 26 adds admin_lock: the administrator can force it on or off for every profile, and clients show the switch disabled at the forced value while constrained_by names admin_lock."
     },
     {
       "key": "catalog.hide_unwatched_episode_overviews",
@@ -804,7 +805,8 @@
       "label": "Hide unwatched episode descriptions",
       "description": "Hide an episode's description until you start watching it.",
       "recommended_control": "switch",
-      "notes": "Clients apply this with the same unwatched rule as catalog.hide_unwatched_episode_images: neither played nor in progress. Covers episode overviews in episode lists, on episode detail, and on the next-episode screen in the player. Series and season overviews are not affected. Separate from the image setting because some viewers want to hide only one of the two."
+      "admin_lock": true,
+      "notes": "Clients apply this with the same unwatched rule as catalog.hide_unwatched_episode_images: neither played nor in progress. Covers episode overviews in episode lists, on episode detail, and on the next-episode screen in the player. Series and season overviews are not affected. Separate from the image setting because some viewers want to hide only one of the two. Revision 26 adds admin_lock, with the same behavior as on catalog.hide_unwatched_episode_images."
     },
     {
       "key": "player.hdr_enabled",

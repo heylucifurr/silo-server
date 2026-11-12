@@ -8,6 +8,8 @@ import (
 
 	"github.com/Silo-Server/silo-server/internal/api/handlers"
 	"github.com/Silo-Server/silo-server/internal/config"
+	"github.com/Silo-Server/silo-server/internal/settingscontract"
+	"github.com/Silo-Server/silo-server/internal/settingskeys"
 )
 
 type fakeAdminSettingsWrite struct {
@@ -121,4 +123,34 @@ func TestAdminSettingsWriteSnapshotGuard(t *testing.T) {
 
 func (f *fakeAdminSettingsWrite) SnapshotAdminSettings(stored map[string]string) handlers.AdminSettingsSnapshot {
 	return (&handlers.AdminHandler{}).SnapshotAdminSettings(stored)
+}
+
+// TestAdminLocksRequireActingAdmin: a lock forces a setting on every viewer,
+// so reading or writing one is refused to a regular account and to a
+// non-primary profile on an admin account, before anything is stored.
+func TestAdminLocksRequireActingAdmin(t *testing.T) {
+	lockKey := settingscontract.AdminLockSettingKey(settingskeys.CatalogHideUnwatchedEpisodeImages)
+	f := &fakeAdminSettingsWrite{stored: map[string]string{lockKey: ""}}
+	deps := pilotDeps(nil, nil)
+	deps.CursorSecret = []byte("synthetic-settings-test-secret")
+	deps.AdminSettingsInspection = f
+	deps.AdminSettingsWrite = f
+	h := NewHandler(deps)
+	path := Prefix + "/admin/settings"
+
+	for _, headers := range []map[string]string{bearer(memberToken), with(bearer(adminToken), "X-Profile-Id", "p-owner")} {
+		requireProblem(t, do(t, h, "GET", path, "", headers), TypePermissionDenied)
+		requireProblem(t, do(t, h, "PUT", path, `{"values":{"`+lockKey+`":"true"}}`, headers), TypePermissionDenied)
+		requireProblem(t, do(t, h, "PUT", path+"/"+lockKey, `{"value":"true"}`, headers), TypePermissionDenied)
+	}
+	if f.writes != 0 || f.stored[lockKey] != "" {
+		t.Fatalf("a refused request changed the lock: writes=%d value=%q", f.writes, f.stored[lockKey])
+	}
+
+	read := do(t, h, "GET", path+"/effective", "", bearer(adminToken))
+	headers := with(bearer(adminToken), "If-Match", read.Header().Get("ETag"))
+	saved := do(t, h, "PUT", path, `{"values":{"`+lockKey+`":"true"}}`, headers)
+	if saved.Code != 200 || f.stored[lockKey] != "true" {
+		t.Fatalf("admin lock save: status=%d value=%q body=%s", saved.Code, f.stored[lockKey], saved.Body.String())
+	}
 }

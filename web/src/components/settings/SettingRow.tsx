@@ -9,9 +9,11 @@ interface SettingRowProps {
   control: (id: string) => ReactNode;
   /** Optional leading glyph, drawn in a small round tile. */
   icon?: ReactNode;
+  /** Optional extra line under the description, such as why the control is locked. */
+  note?: ReactNode;
 }
 
-export function SettingRow({ label, description, control, icon }: SettingRowProps) {
+export function SettingRow({ label, description, control, icon, note }: SettingRowProps) {
   const id = useId();
 
   return (
@@ -32,6 +34,7 @@ export function SettingRow({ label, description, control, icon }: SettingRowProp
           {description ? (
             <p className="text-muted-foreground text-[13px] leading-relaxed">{description}</p>
           ) : null}
+          {note}
         </div>
       </div>
       <div className="flex md:justify-end">{control(id)}</div>

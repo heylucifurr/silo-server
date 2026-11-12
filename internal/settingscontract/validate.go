@@ -129,6 +129,15 @@ func (d *Definition) validate(manifestRevision int, objectSchemas map[string]*js
 		// through server resolution, which a client_local setting never has.
 		errs = append(errs, errors.New("admin_default requires remote persistence"))
 	}
+	if d.AdminLock && !d.IsRemote() {
+		// Same reason: a lock is applied by server resolution.
+		errs = append(errs, errors.New("admin_lock requires remote persistence"))
+	}
+	if d.AdminLock && d.ConstrainedBy != nil {
+		// An effective value reports one constraint; two would have to be
+		// merged, and nothing needs that yet.
+		errs = append(errs, errors.New("admin_lock and constrained_by are exclusive"))
+	}
 
 	return errors.Join(errs...)
 }

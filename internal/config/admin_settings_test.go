@@ -290,6 +290,9 @@ func TestNormalizeAdminSettingRejectsInvalidValues(t *testing.T) {
 		{key: "defaults.ui.title_art", value: `"false"`},
 		{key: "defaults.ui.title_art", value: "1"},
 		{key: "defaults.ui.title_art", value: "null"},
+		// A lock is validated the same way, so a bad one never reaches a viewer.
+		{key: "locks.catalog.hide_unwatched_episode_images", value: "on"},
+		{key: "locks.catalog.hide_unwatched_episode_overviews", value: `"true"`},
 		{key: "autoscan.events_retention_days", value: "0"},
 		{key: "autoscan.events_retention_days", value: "3651"},
 		{key: DashboardHiddenAttentionSettingKey, value: "email"},
@@ -333,6 +336,9 @@ func TestNormalizeAdminSettingAcceptsValidValues(t *testing.T) {
 		// A defaults.* key for a setting without admin_default is not an
 		// administrator default and passes through untouched.
 		{"defaults.ui.theme", "anything", "anything"},
+		{"locks.catalog.hide_unwatched_episode_images", " true ", "true"},
+		{"locks.catalog.hide_unwatched_episode_images", "false", "false"},
+		{"locks.catalog.hide_unwatched_episode_images", "", ""},
 		{DashboardHiddenAttentionSettingKey, "", ""},
 		{DashboardHiddenAttentionSettingKey, "[]", ""},
 		{DashboardHiddenAttentionSettingKey, ` [" email ", "storage", "email", ""] `, `["email","storage"]`},

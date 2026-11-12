@@ -980,6 +980,16 @@ func TestValidateRejectsMalformedManifests(t *testing.T) {
 			d.ResolutionOrder = []Scope{ScopeClientLocal, ScopeDefault}
 			d.AdminDefault = true
 		},
+		"admin lock on a client_local setting": func(d *Definition) {
+			d.Persistence = PersistenceClientLocal
+			d.AllowedScopes = []ScopeEntry{{Scope: ScopeClientLocal}}
+			d.ResolutionOrder = []Scope{ScopeClientLocal, ScopeDefault}
+			d.AdminLock = true
+		},
+		"admin lock beside constrained_by": func(d *Definition) {
+			d.AdminLock = true
+			d.ConstrainedBy = &Constraint{PolicyInput: "example", Constraint: ConstraintLocked}
+		},
 	}
 
 	for name, mutate := range cases {

@@ -158,7 +158,14 @@ type Definition struct {
 	// built with settingsresolve's WithAdminDefaults read it, so every server
 	// path that resolves such a key must build its resolver that way.
 	AdminDefault bool `json:"admin_default,omitempty"`
-	Deprecated   bool `json:"deprecated,omitempty"`
+	// AdminLock lets the server administrator force one value on every
+	// viewer. The forced value lives in server settings under
+	// AdminLockSettingKey; while it is set, resolution reports it as a locked
+	// constraint bound to PolicyInputAdminLock and keeps the viewer's own
+	// value as the requested one, so it applies again once the lock is lifted.
+	// Exclusive with ConstrainedBy, since an answer carries one constraint.
+	AdminLock  bool `json:"admin_lock,omitempty"`
+	Deprecated bool `json:"deprecated,omitempty"`
 	// Notes is maintainer commentary. It is stripped from the public manifest.
 	Notes string `json:"notes,omitempty"`
 }
@@ -429,6 +436,43 @@ func (m *Manifest) AdminDefaultFor(serverSettingKey string) (*Definition, bool) 
 		return nil, false
 	}
 	return def, true
+}
+
+// adminLockPrefix namespaces administrator locks among server settings.
+const adminLockPrefix = "locks."
+
+// PolicyInputAdminLock is the policy_input an administrator lock reports in
+// constrained_by, so clients can tell it apart from a household limit.
+const PolicyInputAdminLock = "admin_lock"
+
+// AdminLockSettingKey is the server-settings key that holds the value the
+// administrator forces for a setting, as JSON text. An empty or absent value
+// means no lock: every viewer chooses for themselves.
+func AdminLockSettingKey(key string) string {
+	return adminLockPrefix + key
+}
+
+// AdminLockFor returns the definition whose administrator lock the
+// server-settings key holds, or false when the key holds none.
+func (m *Manifest) AdminLockFor(serverSettingKey string) (*Definition, bool) {
+	key, ok := strings.CutPrefix(serverSettingKey, adminLockPrefix)
+	if !ok {
+		return nil, false
+	}
+	def, ok := m.Lookup(key)
+	if !ok || !def.AdminLock {
+		return nil, false
+	}
+	return def, true
+}
+
+// AdminOverrideFor returns the definition whose administrator default or
+// lock the server-settings key holds, or false when it holds neither.
+func (m *Manifest) AdminOverrideFor(serverSettingKey string) (*Definition, bool) {
+	if def, ok := m.AdminDefaultFor(serverSettingKey); ok {
+		return def, true
+	}
+	return m.AdminLockFor(serverSettingKey)
 }
 
 // VisibleAtRevision reports whether a client pinned to revision may surface this

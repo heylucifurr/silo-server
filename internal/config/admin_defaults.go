@@ -39,8 +39,9 @@ type adminDefaultsSnapshot struct {
 	expires time.Time
 }
 
-// AdminDefaults serves the administrator's defaults for every setting the
-// contract marks admin_default, from one per-node snapshot. Viewer-scope
+// AdminDefaults serves the administrator's defaults and locks for every
+// setting the contract marks admin_default or admin_lock, from one per-node
+// snapshot. Viewer-scope
 // resolution runs on nearly every authenticated request, so:
 //
 //   - a fresh snapshot is read without a lock;
@@ -87,13 +88,21 @@ func NewAdminDefaults(settings ManySettingReader) *AdminDefaults {
 		return a
 	}
 	for _, def := range contract.Definitions {
+		// Locks ride the same snapshot: they are read on the same requests and
+		// change through the same admin writes.
 		if def.AdminDefault {
-			key := settingscontract.AdminDefaultSettingKey(def.Key)
-			a.keys = append(a.keys, key)
-			a.known[key] = true
+			a.add(settingscontract.AdminDefaultSettingKey(def.Key))
+		}
+		if def.AdminLock {
+			a.add(settingscontract.AdminLockSettingKey(def.Key))
 		}
 	}
 	return a
+}
+
+func (a *AdminDefaults) add(key string) {
+	a.keys = append(a.keys, key)
+	a.known[key] = true
 }
 
 // Get returns the stored administrator default for a server-settings key such

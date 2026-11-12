@@ -237,6 +237,9 @@ func generateTypeScript(contract *settingscontract.Manifest) ([]byte, error) {
 	out.WriteString("  /** The server administrator may replace defaultValue for the whole server,\n")
 	out.WriteString("   * so a value with source \"default\" can differ from it. */\n")
 	out.WriteString("  adminDefault?: boolean;\n")
+	out.WriteString("  /** The server administrator may force one value on every viewer; the\n")
+	out.WriteString("   * effective answer then reports constrained_by.policy_input \"admin_lock\". */\n")
+	out.WriteString("  adminLock?: boolean;\n")
 	out.WriteString("  label: string;\n")
 	out.WriteString("  description: string;\n")
 	out.WriteString("  category: string;\n")
@@ -284,6 +287,9 @@ func generateTypeScript(contract *settingscontract.Manifest) ([]byte, error) {
 		fmt.Fprintf(&out, "    defaultValue: %s,\n", defaultLiteral(def))
 		if def.AdminDefault {
 			out.WriteString("    adminDefault: true,\n")
+		}
+		if def.AdminLock {
+			out.WriteString("    adminLock: true,\n")
 		}
 		fmt.Fprintf(&out, "    label: %s,\n", jsString(def.Label))
 		fmt.Fprintf(&out, "    description: %s,\n", jsString(def.Description))

@@ -229,4 +229,37 @@ describe("TitlePagesSettings", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Show advisory age" })).toBeInTheDocument();
   });
+
+  it("shows an admin-locked spoiler switch at the forced value and never writes it", async () => {
+    mocks.capabilities = capabilitiesAtRevision(26);
+    mocks.useEffectiveSettings.mockReturnValue({
+      data: {
+        // The profile chose off; the administrator forces on.
+        [SETTING_KEYS.CATALOG_HIDE_UNWATCHED_EPISODE_IMAGES]: {
+          key: SETTING_KEYS.CATALOG_HIDE_UNWATCHED_EPISODE_IMAGES,
+          value: true,
+          source: "profile",
+          constrained: true,
+          constraint_kind: "locked",
+          requested_value: false,
+          constrained_by: { policy_input: "admin_lock", constraint: "locked" },
+          permitted_values: [true],
+        },
+        ...resolved(SETTING_KEYS.CATALOG_HIDE_UNWATCHED_EPISODE_OVERVIEWS, false, "profile"),
+      } as EffectiveSettingsMap,
+      isPending: false,
+      isError: false,
+    });
+    render(<TitlePagesSettings />);
+
+    const images = screen.getByRole("switch", { name: "Blur unwatched episode images" });
+    expect(images).toBeChecked();
+    expect(images).toBeDisabled();
+    expect(screen.getAllByText("Set by your server admin")).toHaveLength(1);
+    await userEvent.click(images);
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    const overviews = screen.getByRole("switch", { name: "Hide unwatched episode descriptions" });
+    expect(overviews).toBeEnabled();
+  });
 });

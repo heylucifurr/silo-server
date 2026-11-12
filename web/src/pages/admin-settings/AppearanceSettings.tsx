@@ -38,7 +38,7 @@ import {
   type OverlayPosition,
   type PresetId,
 } from "@/lib/overlays";
-import { adminDefaultServerKey } from "@/lib/settingsAdminDefaults";
+import { adminDefaultServerKey, adminLockServerKey } from "@/lib/settingsAdminDefaults";
 import { SETTING_DEFINITIONS, SETTING_KEYS } from "@/lib/settingsContract";
 import { cn } from "@/lib/utils";
 import { FieldGroup } from "./FieldGroup";
@@ -81,7 +81,29 @@ const TITLE_ART = SETTING_DEFINITIONS[SETTING_KEYS.UI_TITLE_ART];
  */
 const OVERLAY_KEYS = [OVERLAYS_ENABLED_KEY, OVERLAY_DEFAULTS_KEY];
 const TITLE_ART_KEYS = [TITLE_ART_DEFAULT_KEY];
-const KEYS = [ACCENT_KEY, ...OVERLAY_KEYS, ...TITLE_ART_KEYS];
+
+/**
+ * The spoiler switches the administrator can force for every profile, which
+ * their manifest definitions mark admin_lock. The server applies the lock when
+ * it resolves each profile's settings, so every client follows it.
+ */
+const SPOILER_SETTINGS = [
+  SETTING_KEYS.CATALOG_HIDE_UNWATCHED_EPISODE_IMAGES,
+  SETTING_KEYS.CATALOG_HIDE_UNWATCHED_EPISODE_OVERVIEWS,
+].map((key) => ({ definition: SETTING_DEFINITIONS[key], serverKey: adminLockServerKey(key) }));
+const SPOILER_KEYS = SPOILER_SETTINGS.map(({ serverKey }) => serverKey);
+/**
+ * Stored as the forced JSON value, or empty to let each profile choose. The
+ * select cannot hold an empty value, so "Let users choose" has a stand-in.
+ */
+const LET_USERS_CHOOSE = "choose";
+const SPOILER_POLICY_OPTIONS = [
+  { value: LET_USERS_CHOOSE, label: "Let users choose" },
+  { value: "true", label: "Always on for everyone" },
+  { value: "false", label: "Always off for everyone" },
+];
+
+const KEYS = [ACCENT_KEY, ...OVERLAY_KEYS, ...TITLE_ART_KEYS, ...SPOILER_KEYS];
 
 /**
  * Silo's built-in overlay configuration, derived from the registry's own
@@ -405,6 +427,22 @@ export default function AppearanceSettings() {
             onChange={(v) => form.setValue(TITLE_ART_DEFAULT_KEY, v)}
             restartRequired={restartKeys.has(TITLE_ART_DEFAULT_KEY)}
           />
+        </FieldGroup>
+
+        <FieldGroup label="Spoilers" restartAll={allRestart(SPOILER_KEYS)}>
+          {SPOILER_SETTINGS.map(({ definition, serverKey }) => (
+            <SettingField
+              key={serverKey}
+              label={definition.label}
+              description="Let each profile choose, or apply one choice to every profile on every device. A profile's own choice is kept and applies again when you let users choose."
+              type="select"
+              options={SPOILER_POLICY_OPTIONS}
+              value={form.getValue(serverKey) || LET_USERS_CHOOSE}
+              onChange={(v) => form.setValue(serverKey, v === LET_USERS_CHOOSE ? "" : v)}
+              dirty={form.isDirty(serverKey)}
+              restartRequired={restartKeys.has(serverKey)}
+            />
+          ))}
         </FieldGroup>
       </div>
 

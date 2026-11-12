@@ -934,7 +934,11 @@ func NormalizeAdminSetting(key, raw string) (string, error) {
 	}
 
 	if def, ok := adminDefaultDefinition(key); ok {
-		return normalizeAdminDefault(def, value)
+		return normalizeAdminOverride(key, def, value)
+	}
+	if def, ok := adminLockDefinition(key); ok {
+		// A lock holds a value of the same type; empty lifts it.
+		return normalizeAdminOverride(key, def, value)
 	}
 
 	return raw, nil
@@ -951,17 +955,27 @@ func adminDefaultDefinition(key string) (*settingscontract.Definition, bool) {
 	return contract.AdminDefaultFor(key)
 }
 
-// normalizeAdminDefault validates an administrator default against the value
-// schema of the setting it stands in for. Empty clears it, so viewers inherit
-// the contract default again.
-func normalizeAdminDefault(def *settingscontract.Definition, value string) (string, error) {
+// adminLockDefinition returns the settings-contract definition whose
+// server-wide lock the key holds.
+func adminLockDefinition(key string) (*settingscontract.Definition, bool) {
+	contract, err := settingscontract.Load()
+	if err != nil {
+		return nil, false
+	}
+	return contract.AdminLockFor(key)
+}
+
+// normalizeAdminOverride validates an administrator default or lock, held
+// under serverKey, against the value schema of the setting it applies to.
+// Empty clears it: viewers inherit the contract default again, or choose for
+// themselves again.
+func normalizeAdminOverride(serverKey string, def *settingscontract.Definition, value string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
 	normalized, err := def.ValueSchema.NormalizeValue(json.RawMessage(value), settingscontract.ObjectSchemas())
 	if err != nil {
-		return "", fmt.Errorf("%s must be a valid %s value: %w",
-			settingscontract.AdminDefaultSettingKey(def.Key), def.Key, err)
+		return "", fmt.Errorf("%s must be a valid %s value: %w", serverKey, def.Key, err)
 	}
 	return string(normalized), nil
 }

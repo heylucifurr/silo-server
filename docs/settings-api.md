@@ -187,6 +187,24 @@ after the event, so a client that keeps what it read should read once more after
 applies the same value wherever it reads the setting itself, such as the Next Up row and ordering in
 home sections and in Jellyfin `/Shows/NextUp`.
 
+A definition marked `admin_lock` (today `catalog.hide_unwatched_episode_images` and
+`catalog.hide_unwatched_episode_overviews`, from revision 26) can be forced to one value for every
+viewer. The value is stored as JSON text in the server setting `locks.<key>`, written through the
+admin settings API (acting admin only) and validated against the definition's value schema; an
+empty or absent value means each viewer chooses. While a lock is set, the effective answer's
+`value` is the forced one and it carries
+`constrained_by: {"policy_input": "admin_lock", "constraint": "locked"}` and
+`permitted_values: [<forced value>]`, whether or not the viewer's own value already matched. When
+the forced value differs from the viewer's, the answer also carries `constrained: true`,
+`constraint_kind: "locked"` and `requested_value`. `source` and the row members still name where
+the viewer's own value lives: the lock never rewrites stored rows, so lifting it restores each
+viewer's choice. Clients show the control disabled at `value` while `constrained_by.policy_input`
+is `admin_lock`. A write to a locked key is still accepted and stored, and takes effect once the
+lock is lifted. Changing a lock publishes the same `scope: "default"` event, with the same
+10-second convergence, as an administrator default. `admin_lock` and `constrained_by` are
+exclusive on a definition. The resolver applies locks in `internal/settingsresolve`, so every path
+built with administrator defaults returns the same answer.
+
 ### Batch effective resolution
 
 `POST /api/v2/settings/values/effective` resolves one bounded list of keys under several content

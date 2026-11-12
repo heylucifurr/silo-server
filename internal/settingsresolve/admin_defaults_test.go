@@ -180,3 +180,86 @@ func TestBatchedResolutionsShareTheAdminDefault(t *testing.T) {
 		}
 	}
 }
+
+// TestAdminLockResolution is the spoiler policy table: for each administrator
+// policy and each profile choice, the effective value, whether the answer
+// reports the lock, and that the profile's own value survives the lock.
+func TestAdminLockResolution(t *testing.T) {
+	profile := userstore.SettingIdentity{ProfileID: "p1"}
+	for _, key := range []string{
+		settingskeys.CatalogHideUnwatchedEpisodeImages,
+		settingskeys.CatalogHideUnwatchedEpisodeOverviews,
+	} {
+		for _, tc := range []struct {
+			policy      string // "" = let users choose, "true" = always on, "false" = always off
+			profileOn   bool
+			wantValue   string
+			wantLocked  bool
+			wantChanged bool
+		}{
+			{policy: "", profileOn: false, wantValue: "false"},
+			{policy: "", profileOn: true, wantValue: "true"},
+			{policy: "true", profileOn: false, wantValue: "true", wantLocked: true, wantChanged: true},
+			{policy: "true", profileOn: true, wantValue: "true", wantLocked: true},
+			{policy: "false", profileOn: false, wantValue: "false", wantLocked: true},
+			{policy: "false", profileOn: true, wantValue: "false", wantLocked: true, wantChanged: true},
+		} {
+			stored := "false"
+			if tc.profileOn {
+				stored = "true"
+			}
+			t.Run(key+"/policy="+tc.policy+"/profile="+stored, func(t *testing.T) {
+				settings := &fakeServerSettings{values: map[string]string{
+					settingscontract.AdminLockSettingKey(key): tc.policy,
+				}}
+				got, err := New(mustContract(t)).WithAdminDefaults(settings).Resolve(context.Background(),
+					&fakeStore{rows: []userstore.SettingValue{row(key, settingscontract.ScopeProfile, stored, profile)}},
+					Context{ProfileID: "p1"}, []string{key}, nil)
+				if err != nil || len(got) != 1 {
+					t.Fatalf("Resolve = %v, %v", got, err)
+				}
+				eff := got[0]
+				if string(eff.Value) != tc.wantValue {
+					t.Fatalf("value %s, want %s", eff.Value, tc.wantValue)
+				}
+				locked := eff.ConstrainedBy != nil &&
+					eff.ConstrainedBy.PolicyInput == settingscontract.PolicyInputAdminLock &&
+					eff.ConstrainedBy.Constraint == settingscontract.ConstraintLocked
+				if locked != tc.wantLocked {
+					t.Fatalf("locked = %v (constrained_by %+v), want %v", locked, eff.ConstrainedBy, tc.wantLocked)
+				}
+				if eff.Constrained != tc.wantChanged {
+					t.Fatalf("constrained = %v, want %v", eff.Constrained, tc.wantChanged)
+				}
+				if tc.wantChanged && string(eff.RequestedValue) != stored {
+					t.Fatalf("requested_value %s, want the profile's own %s", eff.RequestedValue, stored)
+				}
+				if eff.Source != settingscontract.ScopeProfile {
+					t.Fatalf("source %q, want profile: the lock never rewrites where the choice lives", eff.Source)
+				}
+			})
+		}
+	}
+}
+
+// TestAdminLockIgnoresAnInvalidOrUnreadablePolicy keeps a bad or unreadable
+// stored policy from changing anyone's answer: the profile's choice stands.
+func TestAdminLockIgnoresAnInvalidOrUnreadablePolicy(t *testing.T) {
+	key := settingskeys.CatalogHideUnwatchedEpisodeImages
+	rows := []userstore.SettingValue{row(key, settingscontract.ScopeProfile, "true", userstore.SettingIdentity{ProfileID: "p1"})}
+	for name, settings := range map[string]*fakeServerSettings{
+		"invalid":    {values: map[string]string{settingscontract.AdminLockSettingKey(key): `"yes"`}},
+		"unreadable": {err: errors.New("settings table unavailable")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := New(mustContract(t)).WithAdminDefaults(settings).Resolve(context.Background(),
+				&fakeStore{rows: rows}, Context{ProfileID: "p1"}, []string{key}, nil)
+			if err != nil || len(got) != 1 {
+				t.Fatalf("Resolve = %v, %v", got, err)
+			}
+			if string(got[0].Value) != "true" || got[0].ConstrainedBy != nil {
+				t.Fatalf("got %s constrained_by %+v, want the profile's true unlocked", got[0].Value, got[0].ConstrainedBy)
+			}
+		})
+	}
+}
