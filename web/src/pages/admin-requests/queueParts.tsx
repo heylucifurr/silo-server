@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRequestedQualities, requestDisplayState, tmdbImageURL } from "@/lib/mediaRequests";
+import { useAppLanguage, useT } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { formatTargetStatus, requestProblemText } from "./requestQueueModel";
 
@@ -98,6 +99,8 @@ export function RequestStateSummary({ request }: { request: MediaRequest }) {
 }
 
 export function TargetStatusBadge({ target }: { target: Pick<RequestTarget, "status"> }) {
+  // formatTargetStatus is a plain helper; follow the app language.
+  useAppLanguage();
   return (
     <Badge variant={target.status === "failed" ? "destructive" : "secondary"}>
       {formatTargetStatus(target.status)}
@@ -159,6 +162,7 @@ function ReasonForm({
   onConfirm: (reason: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const [reason, setReason] = useState("");
   return (
@@ -175,19 +179,19 @@ function ReasonForm({
       </DialogHeader>
       <div className="grid gap-2">
         <Label htmlFor={id} className="text-sm">
-          Reason (optional)
+          {t("web.admin.requests.reason.label")}
         </Label>
         <textarea
           id={id}
           className="border-input bg-background text-foreground focus-visible:ring-ring min-h-[88px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          placeholder="e.g. duplicate of an existing request"
+          placeholder={t("web.admin.requests.reason.placeholder")}
         />
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
-          Keep request
+          {t("web.admin.requests.reason.keep")}
         </Button>
         <Button type="submit" disabled={pending}>
           {confirmLabel}

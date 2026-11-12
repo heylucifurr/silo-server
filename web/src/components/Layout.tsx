@@ -48,6 +48,7 @@ import { catalogKeys } from "@/hooks/queries/keys";
 import { fetchCatalogItemDetail } from "@/hooks/queries/catalogRead";
 import { markCriticalContentLoaded, useCriticalContentLoaded } from "@/lib/startupPriority";
 import { useSettingsReturnPath } from "@/hooks/useSettingsReturnPath";
+import { useT } from "@/i18n";
 import { useSidebarSwap } from "@/hooks/useSidebarSwap";
 
 // Only admins see the activity indicator, so everyone else skips downloading it.
@@ -80,6 +81,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const t = useT();
   const shellRef = useRef<HTMLDivElement>(null);
   const mobileHeaderRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -126,6 +128,7 @@ export default function Layout({ children }: LayoutProps) {
   const isLibraryRoute = location.pathname.startsWith("/library/");
   const isItemRoute = location.pathname.startsWith("/item/");
   const isPersonRoute = location.pathname.startsWith("/person/");
+  const isBoxSetRoute = location.pathname.startsWith("/box-sets/");
   const isSettingsRoute = /^\/settings(\/|$)/.test(location.pathname);
   const settingsReturnPath = useSettingsReturnPath(isSettingsRoute, "/");
   const sidebarSwap = useSidebarSwap(isSettingsRoute);
@@ -166,6 +169,7 @@ export default function Layout({ children }: LayoutProps) {
     isWatchPartyRoomRoute ||
     isLibraryRoute ||
     isItemRoute ||
+    isBoxSetRoute ||
     isRequestsRoute ||
     isTitleRoute ||
     isSearchLandingRoute ||
@@ -175,14 +179,14 @@ export default function Layout({ children }: LayoutProps) {
   // Cold item routes commit a lightweight shell while the sidebar collapses.
   // A detail already cached before navigation skips that gate and renders on
   // the destination's first frame.
-  const isDetailImmersion = isItemRoute || isPersonRoute || isTitleRoute;
+  const isDetailImmersion = isItemRoute || isPersonRoute || isTitleRoute || isBoxSetRoute;
   const targetDetailImmersion = isDetailImmersion;
   // The top bar spans the full width, so the content column does too.
   const mainOffsetClass = showTopNav
     ? ""
     : targetDetailImmersion
-      ? "lg:ml-16"
-      : "lg:ml-[260px]";
+      ? "lg:ms-16"
+      : "lg:ms-[260px]";
   const visualDetailImmersion = useImmediateSidebarCollapse(targetDetailImmersion);
   const {
     itemDetailsReady,
@@ -420,9 +424,9 @@ export default function Layout({ children }: LayoutProps) {
       <div ref={shellRef} className="bg-background relative min-h-[100dvh] overflow-x-clip">
         <a
           href="#main-content"
-          className="focus:bg-background focus:text-foreground focus:ring-ring sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:ring-2 focus:outline-none"
+          className="focus:bg-background focus:text-foreground focus:ring-ring sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-lg focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:ring-2 focus:outline-none"
         >
-          Skip to content
+          {t("web.shell.layout.skipToContent")}
         </a>
         <GlobalSearch />
         {showTopNav ? <TopNav /> : null}
@@ -439,7 +443,7 @@ export default function Layout({ children }: LayoutProps) {
             // second one beside it. The fallback holds the column's place.
             <Suspense
               fallback={
-                <div className="border-sidebar-border/70 bg-sidebar/92 fixed top-0 bottom-0 left-0 z-40 w-[260px] border-r" />
+                <div className="border-sidebar-border/70 bg-sidebar/92 fixed start-0 top-0 bottom-0 z-40 w-[260px] border-e" />
               }
             >
               <UserSettingsSidebar backTo={settingsReturnPath} swap={sidebarSwap} />
@@ -462,7 +466,7 @@ export default function Layout({ children }: LayoutProps) {
             <button
               onClick={() => setMobileOpen(true)}
               className="text-muted-foreground hover:text-foreground hover:bg-accent/60 flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-[0.98]"
-              aria-label="Open menu"
+              aria-label={t("web.shell.layout.openMenu")}
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -482,7 +486,9 @@ export default function Layout({ children }: LayoutProps) {
             {showAdminActivity && <AdminActivityIndicator />}
             <Link
               to="/settings"
-              aria-label={`${profile?.name ?? user?.username ?? "User"} settings`}
+              aria-label={t("web.shell.layout.profileSettings", {
+                name: profile?.name ?? user?.username ?? t("web.shell.profile.fallbackName"),
+              })}
               className="flex h-9 w-9 items-center justify-center rounded-full transition-transform active:scale-[0.98]"
             >
               <Avatar className="h-9 w-9 shadow-[0_16px_32px_-22px_rgba(0,0,0,0.7)]">
@@ -492,6 +498,7 @@ export default function Layout({ children }: LayoutProps) {
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
                   {profile?.name?.charAt(0).toUpperCase() ??
                     user?.username?.charAt(0).toUpperCase() ??
+                    // eslint-disable-next-line formatjs/no-literal-string-in-jsx -- placeholder initial, not a word
                     "?"}
                 </AvatarFallback>
               </Avatar>
@@ -503,7 +510,7 @@ export default function Layout({ children }: LayoutProps) {
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent side="left" className="w-[280px] p-0 sm:max-w-[280px]">
             <SheetHeader className="sr-only">
-              <SheetTitle>Navigation</SheetTitle>
+              <SheetTitle>{t("web.shell.layout.navigationTitle")}</SheetTitle>
             </SheetHeader>
             <AppSidebar onNavigate={() => setMobileOpen(false)} />
           </SheetContent>

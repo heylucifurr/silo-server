@@ -29,6 +29,7 @@ import {
   type AIProviderDraft,
   type AIProviderType,
 } from "@/hooks/queries/admin/aiProviders";
+import { useT, type MessageKey, type Translate } from "@/i18n";
 import { AI_CAPABILITY_LABELS, hostLabel, providerOptions } from "@/lib/aiProviders";
 import { cn } from "@/lib/utils";
 
@@ -42,10 +43,10 @@ import { useBranding } from "@/hooks/useBranding";
 const ALL_CAPABILITIES: AICapability[] = ["chat", "embeddings", "speech"];
 
 /** Jobs a provider can be used by, as `used_by` names them. */
-const JOB_LABELS: Record<string, string> = {
-  text: "Text model",
-  speech: "Speech-to-text",
-  embeddings: "Embeddings",
+const JOB_LABELS: Record<string, MessageKey> = {
+  text: "web.admin.settings.ai.jobs.text",
+  speech: "web.admin.settings.ai.jobs.speech",
+  embeddings: "web.admin.settings.ai.jobs.embeddings",
 };
 
 const TYPE_MONOGRAMS: Record<AIProviderType["type"], [string, string]> = {
@@ -73,8 +74,10 @@ export function CapabilityChips({ capabilities }: { capabilities: AICapability[]
   );
 }
 
-function usedByLabel(usedBy: string[]): string {
-  return usedBy.map((job) => JOB_LABELS[job] ?? job).join(" and ");
+function usedByLabel(t: Translate, usedBy: string[]): string {
+  return usedBy
+    .map((job) => (JOB_LABELS[job] ? t(JOB_LABELS[job]) : job))
+    .reduce((first, second) => t("web.admin.settings.ai.jobs.listJoin", { first, second }));
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +124,7 @@ export function AIProvidersList({
   /** Offers the ChatGPT plan among the types to add; it is set up elsewhere. */
   onChooseChatGPT?: () => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -146,7 +150,7 @@ export function AIProvidersList({
           onClick={() => setAdding(true)}
         >
           <Plus className="size-3.5" aria-hidden="true" />
-          Add provider
+          {t("web.admin.settings.ai.providers.add")}
         </Button>
       </div>
       <AddAIProviderDialog
@@ -172,6 +176,7 @@ function ProviderRow({
   onExpand: () => void;
   onCollapse: () => void;
 }) {
+  const t = useT();
   const type = types.find((candidate) => candidate.type === provider.type);
   const [monogram, monogramClass] = TYPE_MONOGRAMS[provider.type];
   const inUse = provider.used_by.length > 0;
@@ -184,15 +189,27 @@ function ProviderRow({
       tagline={[
         type?.label,
         hostLabel(provider.base_url),
-        provider.has_api_key ? "key saved" : "no key",
+        provider.has_api_key
+          ? t("web.admin.settings.ai.providers.keySaved")
+          : t("web.admin.settings.ai.providers.noKey"),
       ]
         .filter(Boolean)
         .join(" · ")}
-      meta={inUse ? `Used by ${usedByLabel(provider.used_by)}` : "Not used by any job"}
+      meta={
+        inUse
+          ? t("web.admin.settings.ai.providers.usedBy", { jobs: usedByLabel(t, provider.used_by) })
+          : t("web.admin.settings.ai.providers.notUsed")
+      }
       state={expanded ? "editing" : inUse ? "connected" : "not_connected"}
-      statePill={expanded ? undefined : inUse ? "In use" : "Idle"}
+      statePill={
+        expanded
+          ? undefined
+          : inUse
+            ? t("web.admin.settings.ai.tile.inUse")
+            : t("web.admin.settings.ai.tile.idle")
+      }
       expanded={expanded}
-      primaryAction={{ label: "Manage", onClick: onExpand }}
+      primaryAction={{ label: t("web.admin.settings.ai.tile.manage"), onClick: onExpand }}
     >
       {expanded && type ? (
         <ProviderPanel
@@ -206,9 +223,11 @@ function ProviderRow({
   );
 }
 
-function typeTagline(type: AIProviderType): string {
-  if (type.capabilities.length === 0) return "Any OpenAI-compatible endpoint";
-  return type.key_required ? "API key" : "Local, no key";
+function typeTagline(t: Translate, type: AIProviderType): string {
+  if (type.capabilities.length === 0) return t("web.admin.settings.ai.providers.typeAnyEndpoint");
+  return type.key_required
+    ? t("web.admin.settings.ai.providers.typeApiKey")
+    : t("web.admin.settings.ai.providers.typeLocal");
 }
 
 /** A selectable card in the dialog's first step. */
@@ -227,6 +246,7 @@ function TypeCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -234,7 +254,7 @@ function TypeCard({
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "border-border hover:bg-accent/40 flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+        "border-border hover:bg-accent/40 flex items-start gap-3 rounded-lg border p-3 text-start transition-colors",
         selected && "border-[var(--settings-accent)] bg-[var(--settings-accent-soft)]",
       )}
     >
@@ -253,7 +273,9 @@ function TypeCard({
         {capabilities.length > 0 ? (
           <CapabilityChips capabilities={capabilities} />
         ) : (
-          <span className="text-muted-foreground text-xs">You choose what it serves</span>
+          <span className="text-muted-foreground text-xs">
+            {t("web.admin.settings.ai.providers.typeAnyCapability")}
+          </span>
         )}
       </span>
     </button>
@@ -314,6 +336,7 @@ function AddAIProviderSteps({
   onChooseChatGPT?: () => void;
   onDone: () => void;
 }) {
+  const t = useT();
   const [choice, setChoice] = useState<string>(() => types[0]?.type ?? "");
   const [step, setStep] = useState<"type" | "details">("type");
   const type = types.find((candidate) => candidate.type === choice);
@@ -332,7 +355,7 @@ function AddAIProviderSteps({
       <>
         <DialogHeader>
           <p className="text-xs font-semibold tracking-wide text-[var(--settings-accent)] uppercase">
-            Step 2 of 2
+            {t("web.admin.settings.ai.providers.step", { current: "2", total: "2" })}
           </p>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {type.label}
@@ -340,8 +363,8 @@ function AddAIProviderSteps({
           </DialogTitle>
           <DialogDescription>
             {onCreated
-              ? "Once added, it is selected here."
-              : "Nothing uses the provider until a job selects it under Models."}
+              ? t("web.admin.settings.ai.providers.selectedOnceAdded")
+              : t("web.admin.settings.ai.providers.unusedUntilSelected")}
           </DialogDescription>
         </DialogHeader>
         <ProviderPanel
@@ -359,19 +382,21 @@ function AddAIProviderSteps({
     <>
       <DialogHeader>
         <p className="text-xs font-semibold tracking-wide text-[var(--settings-accent)] uppercase">
-          Step 1 of 2
+          {t("web.admin.settings.ai.providers.step", { current: "1", total: "2" })}
         </p>
-        <DialogTitle>Add an AI provider</DialogTitle>
-        <DialogDescription>
-          Connect each provider once. Its key then serves every job that chooses it.
-        </DialogDescription>
+        <DialogTitle>{t("web.admin.settings.ai.providers.addTitle")}</DialogTitle>
+        <DialogDescription>{t("web.admin.settings.ai.providers.addDescription")}</DialogDescription>
       </DialogHeader>
-      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Provider type">
+      <div
+        className="grid gap-2 sm:grid-cols-2"
+        role="radiogroup"
+        aria-label={t("web.admin.settings.ai.providers.typeGroup")}
+      >
         {types.map((candidate) => (
           <TypeCard
             key={candidate.type}
             label={candidate.label}
-            tagline={typeTagline(candidate)}
+            tagline={typeTagline(t, candidate)}
             monogram={TYPE_MONOGRAMS[candidate.type]}
             capabilities={candidate.capabilities}
             selected={choice === candidate.type}
@@ -380,8 +405,8 @@ function AddAIProviderSteps({
         ))}
         {onChooseChatGPT ? (
           <TypeCard
-            label="ChatGPT plan"
-            tagline="Sign in with a ChatGPT account"
+            label={t("web.admin.settings.ai.chatgpt.plan")}
+            tagline={t("web.admin.settings.ai.chatgpt.signInTagline")}
             monogram={["GP", "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"]}
             capabilities={["chat"]}
             selected={choice === CHATGPT_TYPE}
@@ -391,10 +416,12 @@ function AddAIProviderSteps({
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button type="button" onClick={next} disabled={choice === ""}>
-          {choice === CHATGPT_TYPE ? "Set up ChatGPT plan" : "Continue"}
+          {choice === CHATGPT_TYPE
+            ? t("web.admin.settings.ai.providers.setUpChatgpt")
+            : t("web.admin.settings.ai.providers.continue")}
         </Button>
       </DialogFooter>
     </>
@@ -419,6 +446,7 @@ function ProviderPanel({
   onCreated?: (provider: AIProvider) => void;
 }) {
   const { serverName } = useBranding();
+  const t = useT();
   const [draft, setDraft] = useState<AIProviderDraft>(initial);
   const [test, setTest] = useState<ProviderTestState | undefined>();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -459,7 +487,7 @@ function ProviderPanel({
     } catch (error) {
       setTest({
         ok: false,
-        message: errorMessage(error, "The check could not run."),
+        message: errorMessage(error, t("web.admin.settings.ai.providers.checkFailed")),
         at: Date.now(),
         durationMs: Date.now() - started,
       });
@@ -470,19 +498,21 @@ function ProviderPanel({
     try {
       if (provider) {
         await update.mutateAsync({ id: provider.id, draft });
-        toast.success(`${draft.name} saved.`);
+        toast.success(t("web.admin.settings.ai.providers.saved", { name: draft.name }));
       } else {
         const created = await create.mutateAsync(draft);
         if (onCreated) {
           onCreated(created);
-          toast.success(`${draft.name} connected.`);
+          toast.success(t("web.admin.settings.ai.providers.connected", { name: draft.name }));
         } else {
-          toast.success(`${draft.name} connected. Choose it for a job under Models.`);
+          toast.success(
+            t("web.admin.settings.ai.providers.connectedChooseJob", { name: draft.name }),
+          );
         }
       }
       onDone();
     } catch (error) {
-      toast.error(errorMessage(error, "The provider could not be saved."));
+      toast.error(errorMessage(error, t("web.admin.settings.ai.providers.saveFailed")));
     }
   }
 
@@ -490,10 +520,10 @@ function ProviderPanel({
     if (!provider) return;
     try {
       await remove.mutateAsync(provider.id);
-      toast.success(`${provider.name} removed.`);
+      toast.success(t("web.admin.settings.ai.providers.removed", { name: provider.name }));
       onDone();
     } catch (error) {
-      toast.error(errorMessage(error, "The provider could not be removed."));
+      toast.error(errorMessage(error, t("web.admin.settings.ai.providers.removeFailed")));
     } finally {
       setConfirmDelete(false);
     }
@@ -501,15 +531,20 @@ function ProviderPanel({
 
   return (
     <div>
-      <SettingField label="Name" value={draft.name} onChange={(name) => change({ name })} />
       <SettingField
-        label="Base URL"
+        label={t("web.admin.settings.ai.providers.name")}
+        value={draft.name}
+        onChange={(name) => change({ name })}
+      />
+      <SettingField
+        label={t("web.admin.settings.ai.providers.baseUrl")}
         value={draft.base_url}
         onChange={(base_url) => change({ base_url })}
+        // eslint-disable-next-line formatjs/no-literal-string-in-jsx -- an example value, not text
         hint={type.default_base_url || "https://llm.example.net/v1"}
         description={
           custom
-            ? "Any endpoint that speaks the OpenAI API."
+            ? t("web.admin.settings.ai.providers.baseUrlCustom")
             : type.type === "ollama" || type.type === "whisper"
               ? `Use a host the ${serverName} container can reach; localhost is ${serverName} itself.`
               : "Change only for a proxy or gateway."
@@ -517,24 +552,31 @@ function ProviderPanel({
         status={
           keyMustBeRetyped ? (
             <SettingFieldStatus tone="warn">
-              Enter the API key again for a new address, or clear it.
+              {t("web.admin.settings.ai.providers.retypeKey")}
             </SettingFieldStatus>
           ) : undefined
         }
       />
       <SecretField
-        label="API key"
+        label={t("web.admin.settings.ai.providers.apiKey")}
         value={draft.api_key ?? ""}
         configured={provider?.has_api_key === true}
         onChange={(api_key) => change({ api_key })}
         onKeep={() => change({ api_key: undefined })}
         onClear={provider?.has_api_key ? () => change({ api_key: "" }) : undefined}
         cleared={keyCleared}
-        hint={type.key_required ? undefined : "Empty for a local endpoint that needs none."}
+        hint={type.key_required ? undefined : t("web.admin.settings.ai.providers.apiKeyOptional")}
       />
       {custom ? (
-        <SettingFieldRow label="Serves" description="What this endpoint can answer.">
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Serves">
+        <SettingFieldRow
+          label={t("web.admin.settings.ai.providers.serves")}
+          description={t("web.admin.settings.ai.providers.servesDescription")}
+        >
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label={t("web.admin.settings.ai.providers.serves")}
+          >
             {ALL_CAPABILITIES.map((capability) => {
               const on = draft.capabilities.includes(capability);
               return (
@@ -566,7 +608,7 @@ function ProviderPanel({
       <ProviderPanelActions test={test}>
         {onBack ? (
           <Button type="button" size="sm" variant="outline" onClick={onBack} disabled={busy}>
-            Back
+            {t("common.back")}
           </Button>
         ) : null}
         {provider ? (
@@ -578,12 +620,14 @@ function ProviderPanel({
             disabled={busy || provider.used_by.length > 0}
             title={
               provider.used_by.length > 0
-                ? `Used by ${usedByLabel(provider.used_by)}; choose another provider there first.`
+                ? t("web.admin.settings.ai.providers.removeBlocked", {
+                    jobs: usedByLabel(t, provider.used_by),
+                  })
                 : undefined
             }
             onClick={() => setConfirmDelete(true)}
           >
-            Remove
+            {t("web.admin.settings.ai.providers.remove")}
           </Button>
         ) : null}
         <Button
@@ -593,20 +637,24 @@ function ProviderPanel({
           onClick={() => void runTest()}
           disabled={check.isPending || draft.base_url.trim() === ""}
         >
-          {check.isPending ? "Testing..." : "Test"}
+          {check.isPending
+            ? t("web.admin.settings.ai.providers.testing")
+            : t("web.admin.settings.ai.providers.test")}
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={onDone} disabled={busy}>
-          {dirty ? "Cancel" : "Close"}
+          {dirty ? t("common.cancel") : t("web.admin.settings.ai.tile.close")}
         </Button>
         {dirty ? (
           <Button type="button" size="sm" onClick={() => void save()} disabled={busy}>
-            {provider ? "Save" : "Add provider"}
+            {provider ? t("common.save") : t("web.admin.settings.ai.providers.addSubmit")}
           </Button>
         ) : null}
       </ProviderPanelActions>
       {provider && provider.used_by.length > 0 ? (
         <p className="text-muted-foreground mt-2 text-xs">
-          Used by {usedByLabel(provider.used_by)}. A new key applies to it as soon as it is saved.
+          {t("web.admin.settings.ai.providers.usedByNote", {
+            jobs: usedByLabel(t, provider.used_by),
+          })}
         </p>
       ) : null}
       {provider ? (
@@ -649,6 +697,7 @@ export function EmbeddingProviderField({
   disabled?: boolean;
   restartRequired?: boolean;
 }) {
+  const t = useT();
   const list = useAIProviders();
   const [adding, setAdding] = useState(false);
   const providers = list.data?.providers ?? [];
@@ -659,27 +708,34 @@ export function EmbeddingProviderField({
     .filter((provider) => !provider.capabilities.includes("embeddings"))
     .map((provider) => ({
       value: provider.id,
-      label: `${provider.name} (no embedding models)`,
+      label: t("web.admin.settings.ai.embeddingProvider.noModels", { name: provider.name }),
       disabled: true,
     }));
   return (
     <>
       <SettingField
-        label="Embedding provider"
+        label={t("web.admin.settings.ai.embeddingProvider.label")}
         type="select"
         value={value || NO_EMBEDDING_PROVIDER}
         disabled={disabled || list.isLoading}
         restartRequired={restartRequired}
-        description="Connected in AI Services. ChatGPT plans do not include embedding models."
+        description={t("web.admin.settings.ai.embeddingProvider.description")}
         onChange={(next) => {
           if (next === ADD_PROVIDER) setAdding(true);
           else onChange(next === NO_EMBEDDING_PROVIDER ? "" : next);
         }}
         options={[
-          { value: NO_EMBEDDING_PROVIDER, label: "None" },
+          { value: NO_EMBEDDING_PROVIDER, label: t("web.admin.settings.ai.provider.none") },
           ...providerOptions(providers, "embeddings", value),
           ...unable.filter((option) => option.value !== value),
-          ...(types.length > 0 ? [{ value: ADD_PROVIDER, label: "Connect a provider..." }] : []),
+          ...(types.length > 0
+            ? [
+                {
+                  value: ADD_PROVIDER,
+                  label: t("web.admin.settings.ai.embeddingProvider.connect"),
+                },
+              ]
+            : []),
         ]}
       />
       <AddAIProviderDialog

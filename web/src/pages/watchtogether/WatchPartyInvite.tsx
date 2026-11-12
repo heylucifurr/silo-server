@@ -6,6 +6,7 @@ import { AuthBackground } from "@/components/auth/AuthBackground";
 import { buildWatchPartyDeepLink, detectMobilePlatform } from "@/lib/appDeepLink";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useBranding } from "@/hooks/useBranding";
+import { useT } from "@/i18n";
 
 /**
  * Landing page for shared Watch Party invitations (`/rooms/join?token=`).
@@ -45,13 +46,14 @@ function hasWatchPartyApp(): boolean {
 function AppHandoff({ appLink, hubHref }: { appLink: string; hubHref: string }) {
   const { serverName } = useBranding();
   useDocumentTitle("Watch Party invitation");
+  const t = useT();
   return (
     <div className="auth-shell">
       <AuthBackground />
       <Card className="auth-card glass panel-border w-full max-w-sm border-0">
         <CardHeader>
           <CardTitle className="text-3xl font-extrabold tracking-[-0.04em]">
-            Join the Watch Party
+            {t("web.watchTogether.invite.title")}
           </CardTitle>
           <CardDescription className="mt-2 text-sm leading-6">
             Open this invitation in the {serverName} app, or continue in the browser.
@@ -64,11 +66,11 @@ function AppHandoff({ appLink, hubHref }: { appLink: string; hubHref: string }) 
             </a>
           </Button>
           <p className="text-muted-foreground text-center text-xs">
-            Nothing happens? The app isn&apos;t installed. Continue in the browser instead.
+            {t("web.watchTogether.invite.notInstalled")}
           </p>
           <Button asChild variant="outline" className="w-full">
             <Link to={hubHref} replace>
-              Continue in the browser
+              {t("web.watchTogether.invite.continueBrowser")}
             </Link>
           </Button>
         </CardContent>

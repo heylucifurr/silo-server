@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
+import { findLibraryType } from "@/components/admin/libraries/libraryTypes";
 import {
-  BookHeadphones,
   CalendarDays,
-  Film,
   FolderOpen,
   Home,
   LayoutGrid,
   Library,
   Sparkles,
-  Tv,
 } from "lucide-react";
 import type { UserLibrary } from "@/api/types";
 import { menuItemKey } from "@/lib/uiCustomization";
@@ -33,18 +31,11 @@ export interface ResolvedPrimaryMenuLink {
   icon: ReactNode;
 }
 
+// Same icons the admin library-type picker shows; Library only for a type the
+// picker does not know.
 export function getLibraryIcon(type: string) {
-  switch (type) {
-    case "movies":
-      return <Film className="h-[18px] w-[18px]" />;
-    case "series":
-      return <Tv className="h-[18px] w-[18px]" />;
-    case "audiobook":
-    case "audiobooks":
-      return <BookHeadphones className="h-[18px] w-[18px]" />;
-    default:
-      return <Library className="h-[18px] w-[18px]" />;
-  }
+  const Icon = findLibraryType(type)?.icon ?? Library;
+  return <Icon className="h-[18px] w-[18px]" />;
 }
 
 /**

@@ -15,6 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { V2ProblemError } from "@/api/v2/request";
 import { useUpdateAdminUserSignIn } from "@/hooks/queries/admin/externalSignIn";
+import { useT } from "@/i18n";
+import { TOUCH_TARGETS } from "@/lib/touchTargets";
+import { cn } from "@/lib/utils";
 import { adminSignInErrorText } from "@/lib/externalSignInAdmin";
 import { newPasswordProblem, passwordErrorMessage } from "@/lib/newPassword";
 import { useBranding } from "@/hooks/useBranding";
@@ -43,6 +46,7 @@ export function AdminUserSetPasswordDialog({
   onDone?: (message: string) => void;
 }) {
   const { serverName } = useBranding();
+  const t = useT();
   const update = useUpdateAdminUserSignIn();
   const [password, setPassword] = useState("");
   const [temporary, setTemporary] = useState(true);
@@ -69,11 +73,15 @@ export function AdminUserSetPasswordDialog({
       },
       {
         onSuccess: () => {
-          const change = temporary ? " and must change it at the next sign-in" : "";
+          const username = user.username;
           onDone?.(
             waitsForServer
-              ? `The password is set. ${user.username} can sign in with it${change} once password sign-in is on for the server.`
-              : `${user.username} can sign in with the new password${change}.`,
+              ? temporary
+                ? t("web.admin.users.setPasswordDialog.doneWaitingMustChange", { username })
+                : t("web.admin.users.setPasswordDialog.doneWaiting", { username })
+              : temporary
+                ? t("web.admin.users.setPasswordDialog.doneMustChange", { username })
+                : t("web.admin.users.setPasswordDialog.done", { username }),
           );
           onClose();
         },
@@ -81,8 +89,8 @@ export function AdminUserSetPasswordDialog({
           setError(
             // A validation problem names the refused rule in its field detail.
             err instanceof V2ProblemError && err.problem.errors?.length
-              ? passwordErrorMessage(err, "Couldn't set the password.")
-              : adminSignInErrorText(err, "Couldn't set the password."),
+              ? passwordErrorMessage(err, t("web.admin.users.setPasswordDialog.failed"))
+              : adminSignInErrorText(err, t("web.admin.users.setPasswordDialog.failed")),
           ),
       },
     );
@@ -95,16 +103,16 @@ export function AdminUserSetPasswordDialog({
         if (!open && !update.isPending) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={cn("sm:max-w-md", TOUCH_TARGETS)}>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <DialogHeader>
-            <DialogTitle>Set a password</DialogTitle>
+            <DialogTitle>{t("web.admin.users.setPasswordDialog.title")}</DialogTitle>
             <DialogDescription>
-              {user.username} can't sign in with a {serverName} password now. Setting one turns password
-              sign-in back on for this account. A connected sign-in provider keeps working.
               {waitsForServer
-                ? " Password sign-in is off for the server, so the password works only once it's turned back on in Settings → Sign-in."
-                : ""}
+                ? t("web.admin.users.setPasswordDialog.descriptionServerOff", {
+                    username: user.username,
+                  })
+                : `${user.username} can't sign in with a ${serverName} password now. Setting one turns password sign-in back on for this account. A connected sign-in provider keeps working.`}
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -113,7 +121,9 @@ export function AdminUserSetPasswordDialog({
             </p>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor={passwordId}>New password</Label>
+            <Label htmlFor={passwordId}>
+              {t("web.admin.users.setPasswordDialog.passwordLabel")}
+            </Label>
             <PasswordInput
               id={passwordId}
               autoComplete="new-password"
@@ -124,21 +134,23 @@ export function AdminUserSetPasswordDialog({
               onChange={(event) => setPassword(event.target.value)}
             />
             <p id={hintId} className="text-muted-foreground text-xs">
-              At least 8 characters, at most 72 bytes. Share it with {user.username} yourself.
+              {t("web.admin.users.setPasswordDialog.hint", { username: user.username })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Switch id={temporaryId} checked={temporary} onCheckedChange={setTemporary} />
             <Label htmlFor={temporaryId} className="text-sm font-normal">
-              Require change at next sign-in
+              {t("web.admin.users.setPasswordDialog.requireChange")}
             </Label>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={update.isPending}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? "Setting..." : "Set password"}
+              {update.isPending
+                ? t("web.admin.users.setPasswordDialog.saving")
+                : t("web.admin.users.setPasswordDialog.submit")}
             </Button>
           </DialogFooter>
         </form>

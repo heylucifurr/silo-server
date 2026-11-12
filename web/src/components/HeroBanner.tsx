@@ -85,17 +85,6 @@ interface HeroBannerProps {
   onRefreshItems?: () => void;
 }
 
-/**
- * Alternating slow pan/zoom for consecutive hero slides.
- *
- * These must be written out literally. Tailwind only keeps a theme variable
- * whose name it can find in the scanned source, and assembling the name from a
- * template literal hid both from it — so the real values were tree-shaken out
- * of the bundle and `var(--animate-ken-burns-a)` resolved to nothing at
- * runtime. app.css still overrides both to `none` under
- * `prefers-reduced-motion`, which is what keeps this accessible.
- */
-const KEN_BURNS_ANIMATIONS = ["var(--animate-ken-burns-a)", "var(--animate-ken-burns-b)"] as const;
 const HERO_BACKDROP_FADE_MS = 1000;
 
 function shouldKeepOutgoingBackdropMotion(): boolean {
@@ -104,17 +93,13 @@ function shouldKeepOutgoingBackdropMotion(): boolean {
 
 const HeroBackdropSlide = memo(function HeroBackdropSlide({
   slide,
-  index,
   isActive,
-  keepsMotion,
   shouldLoad,
   hideImage,
   faded,
 }: {
   slide: SectionItem;
-  index: number;
   isActive: boolean;
-  keepsMotion: boolean;
   shouldLoad: boolean;
   hideImage: boolean;
   /**
@@ -152,13 +137,9 @@ const HeroBackdropSlide = memo(function HeroBackdropSlide({
           fetchPriority={isActive ? "high" : "low"}
           className={cn(
             "h-full w-full object-cover object-[center_20%] transition-opacity duration-(--duration-slow)",
-            isActive && "will-change-transform",
             loadedUrl ? "opacity-100" : "opacity-0",
           )}
           style={{
-            animation: keepsMotion
-              ? KEN_BURNS_ANIMATIONS[index % KEN_BURNS_ANIMATIONS.length]
-              : "none",
             filter: `brightness(var(--hero-backdrop-brightness, 0.78)) saturate(var(--hero-backdrop-saturate, 0.95))${hideImage ? " blur(24px)" : ""}`,
           }}
           onLoad={() => setLoadedUrl(imageUrl)}
@@ -546,8 +527,10 @@ export default function HeroBanner({
   const releasedUnowned = availability === "released_unowned";
   const comingSoonDate = formatHeroReleaseDate(current?.release_date ?? undefined);
   const comingSoonLabel = comingSoonDate ? `Coming soon · ${comingSoonDate}` : "Coming soon";
+  // Every card now carries its TMDB ID, so only a slide the library does not
+  // own opens the external title page; the rest open their item page.
   const titleHref =
-    current?.tmdb_id != null
+    unowned && current?.tmdb_id
       ? `/title/${encodeURIComponent(current.type)}/${current.tmdb_id}`
       : buildItemHref({ contentId: current.content_id, libraryId });
 
@@ -570,7 +553,7 @@ export default function HeroBanner({
     <section
       ref={sectionRef}
       className={cn(
-        "home-hero group relative w-full overflow-hidden",
+        "home-hero group relative flex w-full flex-col overflow-hidden",
         heightClassName,
         bleed ? "-mt-[96px] mb-0 sm:-mt-[104px]" : "border-border/60 mb-10 border-b",
       )}
@@ -599,10 +582,8 @@ export default function HeroBanner({
               position_seconds: slide.position_seconds,
             })
           }
-          index={i}
           isActive={i === activeIndex}
           faded={i === activeIndex && clipEnabled && clipStage !== "still"}
-          keepsMotion={i === activeIndex || i === outgoingIndex}
           shouldLoad={
             i === activeIndex ||
             i === outgoingIndex ||
@@ -645,8 +626,10 @@ export default function HeroBanner({
       {/* Content */}
       <div
         className={cn(
-          "relative z-10 flex h-full min-h-0 items-end px-4 pb-10 sm:px-6 sm:pb-12 lg:px-10 lg:pb-16 xl:px-12",
-          reserveHeaderSpace && "pt-24 sm:pt-28 lg:pt-32",
+          "relative z-10 flex flex-1 items-end px-4 pb-10 sm:px-6 sm:pb-12 lg:px-10 lg:pb-16 xl:px-12",
+          // A tall title block grows the hero rather than overflowing it;
+          // the top padding keeps the title off the top edge when that happens.
+          reserveHeaderSpace ? "pt-24 sm:pt-28 lg:pt-32" : "pt-16",
         )}
       >
         <div className="w-full max-w-[1380px]">
@@ -679,7 +662,7 @@ export default function HeroBanner({
             ) : (
               <h1
                 key={current.content_id}
-                className="font-display mb-4 max-w-4xl text-4xl font-extrabold tracking-[-0.04em] text-balance sm:text-5xl lg:text-6xl xl:text-7xl"
+                className="bidi-text font-display mb-4 max-w-4xl text-4xl font-extrabold tracking-[-0.04em] text-balance sm:text-5xl lg:text-6xl xl:text-7xl"
                 style={{ textShadow: "var(--hero-text-shadow, none)" }}
               >
                 {current.title}

@@ -38,7 +38,7 @@ type AdminAnticipatedTitle struct {
 	Position     int      `json:"position" doc:"The admin's order on the hero" example:"0"`
 	Title        string   `json:"title" example:"Avengers: Doomsday"`
 	Year         int      `json:"year,omitempty" example:"2026"`
-	ReleaseDate  string   `json:"release_date,omitempty" doc:"ISO date" example:"2026-12-18"`
+	ReleaseDate  string   `json:"release_date,omitempty" format:"date" doc:"ISO date" example:"2026-12-18"`
 	Overview     string   `json:"overview,omitempty"`
 	PosterPath   string   `json:"poster_path,omitempty" doc:"TMDB image path fragment"`
 	BackdropPath string   `json:"backdrop_path,omitempty" doc:"TMDB image path fragment"`
@@ -82,14 +82,16 @@ type AdminAnticipatedSearchResult struct {
 	TMDBID       int     `json:"tmdb_id" example:"1083381"`
 	Title        string  `json:"title" example:"Avengers: Doomsday"`
 	Year         int     `json:"year,omitempty" example:"2026"`
-	ReleaseDate  string  `json:"release_date,omitempty" example:"2026-12-18"`
+	ReleaseDate  string  `json:"release_date,omitempty" format:"date" example:"2026-12-18"`
 	PosterPath   string  `json:"poster_path,omitempty"`
 	BackdropPath string  `json:"backdrop_path,omitempty"`
 	Overview     string  `json:"overview,omitempty"`
 	VoteAverage  float64 `json:"vote_average,omitempty" example:"8.2"`
 }
 
-type AdminAnticipatedSearchOutput struct{ Body Collection[AdminAnticipatedSearchResult] }
+type AdminAnticipatedSearchOutput struct {
+	Body Collection[AdminAnticipatedSearchResult]
+}
 
 type AdminAnticipatedRefreshOutput struct {
 	Body struct {
@@ -243,4 +245,3 @@ func (reg *Registry) refreshAdminAnticipated(ctx context.Context, _ *struct{}) (
 	}
 	return out, nil
 }
-

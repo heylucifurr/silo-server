@@ -8,6 +8,7 @@ import MediaCardArtwork, {
 } from "@/components/MediaCardArtwork";
 import MediaItemMenu from "@/components/MediaItemMenu";
 import CardOverlays from "@/components/overlays/CardOverlays";
+import CardWatchStatus from "@/components/overlays/CardWatchStatus";
 import { overlayDataFromSectionItem, type CardOverlayPrefs } from "@/lib/overlays";
 import type { CardQuickActionMode } from "@/lib/cardQuickActions";
 import { buildEpisodeCardLabels } from "@/lib/episodeCardLabels";
@@ -30,6 +31,7 @@ import { useToggleWatchlist } from "@/hooks/queries/watchlist";
 import { FEATURED_HOVER_DELAY_MS, FEATURED_TRAILER_DELAY_MS } from "@/lib/featuredCard";
 import { mediaPlayLabel } from "@/lib/mediaPlayLabel";
 import { rankNumeral } from "@/lib/rankNumerals";
+import { numberText, useAppLanguage, useT } from "@/i18n";
 
 interface SectionItemCardProps {
   item: SectionItem;
@@ -138,6 +140,8 @@ export default memo(function SectionItemCard({
     : "";
   // Only the open tile reads these, so nothing is worked out for a resting card.
   const metadata = expanded ? formatHeroMetadata(item) : [];
+  const t = useT();
+  useAppLanguage();
   const itemHref = buildItemHref({ contentId: item.content_id, libraryId });
   const upcomingEvent = item.upcoming_event;
   const subtitle = upcomingEvent ? formatUpcomingSubtitle(upcomingEvent) : "";
@@ -264,8 +268,9 @@ export default memo(function SectionItemCard({
             priority={priority}
           >
             {item.status === "ambiguous" && (
+              // eslint-disable-next-line silo/no-physical-direction -- on the poster artwork, which doesn't mirror; matches CardOverlays and CardWatchStatus
               <span className="absolute top-2.5 left-2.5 rounded-full border border-amber-500/25 bg-black/40 px-2 py-0.5 text-[0.625rem] leading-none font-semibold tracking-wide text-amber-200 uppercase backdrop-blur-sm">
-                Ambiguous
+                {t("web.home.sectionRow.ambiguous")}
               </span>
             )}
             {item.status === "matched" && overlayPrefs && (
@@ -275,7 +280,11 @@ export default memo(function SectionItemCard({
                 scaleWithCard={overlayScale !== "reference"}
               />
             )}
+            {item.status === "matched" && !upcomingEvent && (
+              <CardWatchStatus userState={item.user_state} />
+            )}
             {upcomingEvent && upcomingEvent.badges.length > 0 && (
+              // eslint-disable-next-line silo/no-physical-direction -- on the poster artwork, which doesn't mirror; matches CardOverlays and CardWatchStatus
               <div className="absolute top-2.5 left-2.5 flex max-w-[calc(100%-2.5rem)] flex-wrap gap-1">
                 {upcomingEvent.badges.map((badge) => (
                   <span
@@ -331,7 +340,7 @@ export default memo(function SectionItemCard({
         ) : episodeLabels ? (
           <ViewTransitionLink to={itemHref} className="block hover:underline">
             {episodeLabels.episodeTitle ? (
-              <div className="text-muted-foreground mt-1 truncate text-[0.75rem] font-medium">
+              <div className="bidi-text text-muted-foreground mt-1 truncate text-[0.75rem] font-medium">
                 {episodeLabels.episodeTitle}
               </div>
             ) : null}
@@ -347,7 +356,9 @@ export default memo(function SectionItemCard({
           </ViewTransitionLink>
         ) : (
           <ViewTransitionLink to={itemHref} className={MEDIA_CARD_META_CLASS}>
-            {item.year ? `${item.year}` : ""} {item.type === "series" ? "Series" : ""}
+            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx -- a space, not text */}
+            {item.year ? numberText(item.year) : null}{" "}
+            {item.type === "series" ? t("web.home.sectionRow.seriesType") : null}
           </ViewTransitionLink>
         )}
       </div>

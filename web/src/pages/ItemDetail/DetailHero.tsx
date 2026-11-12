@@ -3,6 +3,8 @@ import { decodeThumbhash } from "@/lib/thumbhash";
 import { imageIdentity, useImageLoaded } from "@/hooks/useImageLoaded";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useShowTitleArt } from "@/hooks/useTitleArt";
+import { HeroBackdropArtwork } from "@/components/HeroBackdropArtwork";
+import { useT } from "@/i18n";
 
 import "./detailLayout.css";
 import DetailOverview from "./components/DetailOverview";
@@ -47,6 +49,11 @@ interface DetailHeroProps {
   scoreRow?: ReactNode;
   crewLine?: ReactNode;
   variant?: "full" | "compact" | "episode" | "series" | "season";
+  /**
+   * Shortens the full hero so the first row of the content below it starts
+   * inside the viewport, for pages whose hero leads into a grid of titles.
+   */
+  shortHero?: boolean;
   topNav?: ReactNode;
 }
 
@@ -78,13 +85,10 @@ export default function DetailHero({
   scoreRow,
   crewLine,
   variant = "full",
+  shortHero = false,
   topNav,
 }: DetailHeroProps) {
-  const {
-    loaded: backdropLoaded,
-    onLoad: onBackdropLoad,
-    onError: onBackdropError,
-  } = useImageLoaded(backdropUrl);
+  const t = useT();
   const {
     loaded: posterLoaded,
     onLoad: onPosterLoad,
@@ -98,7 +102,6 @@ export default function DetailHero({
   // A plain-text context is the title's type; it shares one eyebrow line with
   // the studio or network. Richer context (an episode breadcrumb) keeps its own row.
   const eyebrowType = typeof context === "string" ? context : undefined;
-  const backdropPlaceholder = backdropThumbhash ? decodeThumbhash(backdropThumbhash) : "";
   const posterPlaceholder = posterThumbhash ? decodeThumbhash(posterThumbhash) : "";
   const isCompact = variant === "compact";
   const isViewportBounded = variant === "episode" || variant === "series" || variant === "season";
@@ -147,32 +150,11 @@ export default function DetailHero({
       {/* The artwork stops 1px short of the bottom edge, which the fade below
           covers solidly anyway. At a fractional hero height the edge pixel is
           only partly covered by the fade, and the artwork bled through as a line. */}
-      {(backdropUrl || backdropPlaceholder) && (
-        <div
-          className="hero-backdrop-artwork absolute inset-x-0 top-0 bottom-px"
-          style={{
-            ...(backdropPlaceholder
-              ? {
-                  backgroundImage: `url(${backdropPlaceholder})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center 20%",
-                }
-              : undefined),
-          }}
-        >
-          {backdropUrl && (
-            <img
-              key={imageIdentity(backdropUrl)}
-              src={backdropUrl}
-              alt=""
-              decoding="async"
-              className={`h-full w-full object-cover object-[center_20%] transition-opacity duration-300 ${backdropLoaded ? "opacity-100" : "opacity-0"}`}
-              onLoad={onBackdropLoad}
-              onError={onBackdropError}
-            />
-          )}
-        </div>
-      )}
+      <HeroBackdropArtwork
+        backdropUrl={backdropUrl}
+        backdropThumbhash={backdropThumbhash}
+        className="absolute inset-x-0 top-0 bottom-px"
+      />
 
       {/* Keep the detail treatment on three contained paint surfaces while
           preserving its original stacking: tint/left fade, ambient artwork
@@ -189,7 +171,9 @@ export default function DetailHero({
               // taller than the hero would otherwise overflow out the top, under
               // the floating back button.
               "min-h-[max(35vh,300px)] pt-20 lg:min-h-[42vh]"
-            : "min-h-[60dvh] pt-28 lg:min-h-[72dvh]"
+            : shortHero
+              ? "min-h-[50dvh] pt-24 lg:min-h-[54dvh]"
+              : "min-h-[60dvh] pt-28 lg:min-h-[72dvh]"
         }`}
       >
         <div
@@ -198,7 +182,7 @@ export default function DetailHero({
           }`}
         >
           <div
-            className={`detail-hero-primary-content flex flex-col gap-6 ${showPoster ? "lg:flex-row lg:items-end" : ""}`}
+            className={`detail-hero-primary-content flex min-w-0 flex-col gap-6 ${showPoster ? "lg:flex-row lg:items-end" : ""}`}
           >
             {/* Poster */}
             {showPoster && (
@@ -250,7 +234,7 @@ export default function DetailHero({
                 className={isViewportBounded ? "detail-hero-information" : "contents"}
                 tabIndex={isViewportBounded ? 0 : undefined}
                 role={isViewportBounded ? "region" : undefined}
-                aria-label={isViewportBounded ? "Media details" : undefined}
+                aria-label={isViewportBounded ? t("web.detail.hero.mediaDetailsRegion") : undefined}
               >
                 {context && !eyebrowType && (
                   <div className="detail-hero-context text-muted-foreground mb-4 text-sm font-medium">
@@ -291,7 +275,7 @@ export default function DetailHero({
                   <DetailTitle
                     title={title}
                     bounded={isViewportBounded}
-                    className={`text-foreground mb-3 font-extrabold tracking-tight ${
+                    className={`bidi-text text-foreground mb-3 font-extrabold tracking-tight ${
                       isCompact
                         ? "font-display text-3xl leading-[1.1] sm:text-4xl"
                         : "font-display text-4xl leading-[0.98] tracking-[-0.05em] sm:text-5xl lg:text-7xl"

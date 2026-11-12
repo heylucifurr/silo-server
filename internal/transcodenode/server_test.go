@@ -1097,6 +1097,35 @@ func TestValidateCopyVideoMPEGTSAttestation(t *testing.T) {
 	}
 }
 
+// A node that ignores the copied codec writes AAC into fMP4 without
+// aac_adtstoasc and fails after the first segment. Runs that need no filter
+// keep working on older nodes, which omit the receipt.
+func TestValidateCopyAudioCodecAttestation(t *testing.T) {
+	aacIntoFMP4 := TranscodeStartRequest{SourceVideoCodec: "h264", TargetCodecVideo: "copy", TargetCodecAudio: "copy", CopyAudioCodec: "aac"}
+	aacIntoMPEGTS := aacIntoFMP4
+	aacIntoMPEGTS.CopyVideoMPEGTS = true
+	ac3IntoFMP4 := aacIntoFMP4
+	ac3IntoFMP4.CopyAudioCodec = "ac3"
+	for _, test := range []struct {
+		name     string
+		request  TranscodeStartRequest
+		response TranscodeStartResponse
+		wantErr  bool
+	}{
+		{name: "aac into fmp4 confirmed", request: aacIntoFMP4, response: TranscodeStartResponse{CopyAudioCodec: "aac"}},
+		{name: "aac into fmp4 on an older node", request: aacIntoFMP4, wantErr: true},
+		{name: "aac into mpeg-ts on an older node", request: aacIntoMPEGTS},
+		{name: "ac3 into fmp4 on an older node", request: ac3IntoFMP4},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateCopyAudioCodecAttestation(test.request, test.response)
+			if got := errors.Is(err, ErrCopyAudioCodecAttestationMismatch); got != test.wantErr {
+				t.Fatalf("error = %v, want mismatch %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 // Requests the node cannot execute as written are refused with 400 before
 // anything runs.
 func TestHandleStartAndPrepareRejectInvalidRequests(t *testing.T) {
@@ -1204,6 +1233,16 @@ func TestHandleStartAttestsRecipeVersions(t *testing.T) {
 			},
 			receipt: func(response TranscodeStartResponse) string { return strconv.FormatBool(response.CopyVideoMPEGTS) },
 			want:    "true",
+		},
+		{
+			name: "copied AAC into fMP4",
+			request: TranscodeStartRequest{
+				SessionID: "attested-copy-aac", InputPath: "/media/movie.ts",
+				SourceVideoCodec: "h264", TargetCodecVideo: "copy", TargetCodecAudio: "copy", CopyAudioCodec: "aac",
+				CopyFMP4RecipeVersion: playback.CopyFMP4RecipeVersion, SegmentDuration: 2,
+			},
+			receipt: func(response TranscodeStartResponse) string { return response.CopyAudioCodec },
+			want:    "aac",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2401,6 +2440,49 @@ func TestReconstructFromToken_TokenlessRebuildsFromTheStoredTransportRecipe(t *t
 	}
 	if got := session.Opts().StartSegmentNumber; got != 5 {
 		t.Fatalf("rebuilt start segment = %d, want the segment the client is fetching", got)
+	}
+}
+
+func TestReconstructFromTokenKeepsSubtitleRenditionMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		change  func(*playback.RecipeCard)
+		hydrate bool
+	}{
+		{name: "matching record", change: func(c *playback.RecipeCard) { c.SubtitleRenditionTracks[0].Default = false }, hydrate: true},
+		{name: "different source", change: func(c *playback.RecipeCard) { c.SubtitleRenditionSource.Size++ }},
+		{name: "different track", change: func(c *playback.RecipeCard) { c.SubtitleRenditionTracks[0].TrackNumber++ }},
+		{name: "different owner", change: func(c *playback.RecipeCard) { c.UserID++ }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const sessionID = "sess-rendition-metadata"
+			const transportID = sessionID + "-plan1234-abcd1234"
+			s := newLoopingFFmpegServer(t)
+			card := nativeTransportCard(sessionID, transportID)
+			card.SubtitleRendition = true
+			card.SubtitleRenditionSource = playback.SubtitleRenditionSource{Size: 100, ModTimeUnixNano: 10}
+			card.SubtitleRenditionTracks = []playback.SubtitleRenditionTrack{{StreamIndex: 2, TrackNumber: 3, Codec: "subrip", Name: "English forced", Language: "en", Forced: true, Default: true}}
+			stored := *card
+			stored.SubtitleRenditionTracks = slices.Clone(card.SubtitleRenditionTracks)
+			tc.change(&stored)
+			s.SetRecipeStore(&stubRecipeStore{ok: true, card: &stored})
+			session, err := s.reconstructFromToken(requestWithToken(transportID, signCard(t, *card)), transportID, 5)
+			if err != nil || session == nil {
+				t.Fatalf("reconstruct: %v, %v", session, err)
+			}
+			t.Cleanup(func() { _ = session.CloseProcess() })
+			want := playback.RecipeCardFromClaims(new(card.ToClaims())).SubtitleRenditionTracks
+			if tc.hydrate {
+				want = card.SubtitleRenditionTracks
+			}
+			opts := session.Opts()
+			if !slices.Equal(opts.SubtitleRenditionTracks, want) {
+				t.Fatalf("reconstructed rendition metadata = %+v, want %+v", opts.SubtitleRenditionTracks, want)
+			}
+			if opts.SubtitleRenditionSource != card.SubtitleRenditionSource {
+				t.Fatalf("reconstruction changed token source: %+v", opts.SubtitleRenditionSource)
+			}
+		})
 	}
 }
 

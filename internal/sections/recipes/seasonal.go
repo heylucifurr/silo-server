@@ -468,6 +468,10 @@ type SeasonalPick struct {
 	ListURL    string
 	Title      string
 	Appearance SeasonalAppearance
+	// TitleKey is the catalog key of Title while it is a built-in vibe's own
+	// title, and empty for a title an admin typed (a custom holiday's, or a
+	// theme title override).
+	TitleKey string
 }
 
 // ActiveSeasonalPick returns what the row shows at now, or false when nothing
@@ -499,11 +503,14 @@ func ActiveSeasonalPick(p SeasonalThemedParams, now time.Time) (SeasonalPick, bo
 		return SeasonalPick{}, false
 	}
 	vibe := entry.Vibe(p.Vibes[theme])
-	title := strings.TrimSpace(p.ThemeTitles[theme])
+	title, titleKey := strings.TrimSpace(p.ThemeTitles[theme]), ""
 	if title == "" {
 		title = vibe.Title
+		if title != "" {
+			titleKey = seasonalVibeTitleKey(theme, vibe.Key)
+		}
 	}
-	return SeasonalPick{Theme: theme, Vibe: vibe.Key, ListURL: vibe.ListURL, Title: title, Appearance: usableAppearance(p.ThemeAppearance[theme])}, true
+	return SeasonalPick{Theme: theme, Vibe: vibe.Key, ListURL: vibe.ListURL, Title: title, TitleKey: titleKey, Appearance: usableAppearance(p.ThemeAppearance[theme])}, true
 }
 
 // usableAppearance trims an appearance and drops a background reference the

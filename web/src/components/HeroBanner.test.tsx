@@ -128,13 +128,6 @@ function tenSlides() {
   );
 }
 
-function twoSlides() {
-  return [
-    movieSlide({ content_id: "movie-1", backdrop_url: "/first.jpg" }),
-    movieSlide({ content_id: "movie-2", title: "Second", backdrop_url: "/second.jpg" }),
-  ];
-}
-
 describe("formatHeroMetadata", () => {
   // A slide with only its year left, so each case adds the one field it checks.
   const bare: Partial<SectionItem> = {
@@ -253,49 +246,6 @@ describe("HeroBanner", () => {
     expect(document.querySelector("img")?.getAttribute("style")).not.toContain("blur(");
   });
 
-  it("names the ken burns tokens literally so tailwind keeps them", () => {
-    // Tailwind drops a theme variable it cannot find referenced by name in the
-    // scanned source. Building the name from a template literal tree-shook the
-    // real values out of the bundle, leaving `var(--animate-ken-burns-a)` to
-    // resolve to nothing — the hero simply never animated. app.css still sets
-    // both to `none` under prefers-reduced-motion.
-    const markup = renderToStaticMarkup(
-      hero({ items: [movieSlide({ backdrop_url: "/backdrop.jpg" })] }),
-    );
-
-    expect(markup).toContain('src="/backdrop.jpg"');
-    expect(markup).toContain("var(--animate-ken-burns-a)");
-  });
-
-  it("keeps outgoing backdrop motion through its fade, then releases it", () => {
-    vi.useFakeTimers();
-    const { container, unmount } = render(hero({ items: twoSlides() }));
-    const images = Array.from(container.querySelectorAll("img"));
-
-    expect(images[0]?.style.animation).toBe("var(--animate-ken-burns-a)");
-    expect(images[0]).toHaveClass("will-change-transform");
-    expect(images[1]?.style.animation).toBe("none");
-    expect(images[1]).not.toHaveClass("will-change-transform");
-
-    act(() => screen.getByRole("button", { name: "Next slide" }).click());
-
-    expect(images[0]?.style.animation).toBe("var(--animate-ken-burns-a)");
-    expect(images[0]).not.toHaveClass("will-change-transform");
-    expect(images[1]?.style.animation).toBe("var(--animate-ken-burns-b)");
-    expect(images[1]).toHaveClass("will-change-transform");
-
-    act(() => vi.advanceTimersByTime(999));
-    expect(images[0]?.style.animation).toBe("var(--animate-ken-burns-a)");
-
-    act(() => vi.advanceTimersByTime(1));
-    expect(images[0]?.style.animation).toBe("none");
-    expect(images[0]).not.toHaveClass("will-change-transform");
-    expect(images.filter((image) => image.style.animation !== "none")).toHaveLength(1);
-
-    unmount();
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
   it("starts only the active and next backdrop requests, including wraparound", () => {
     const { container } = render(hero({ items: tenSlides() }));
     const sources = () =>
@@ -389,22 +339,6 @@ describe("HeroBanner", () => {
     expect(replacement).toHaveClass("opacity-100");
     fireEvent.click(screen.getByRole("button", { name: "Previous slide" }));
     expect(container.querySelector('img[src="/replacement.jpg"]')).toBe(image);
-  });
-
-  it("does not retain outgoing backdrop motion for reduced motion", () => {
-    vi.stubGlobal("matchMedia", () => ({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
-    const { container } = render(hero({ items: twoSlides() }));
-    const images = Array.from(container.querySelectorAll("img"));
-
-    act(() => screen.getByRole("button", { name: "Next slide" }).click());
-
-    expect(images[0]?.style.animation).toBe("none");
-    expect(images[0]).not.toHaveClass("will-change-transform");
-    expect(images[1]).toHaveClass("will-change-transform");
   });
 
   it("renders editorial metadata in the approved order and caps genres at two", () => {
@@ -874,7 +808,7 @@ describe("an anticipated slide", () => {
   it("offers Coming soon with its release date instead of Play", () => {
     const item = movieSlide({
       content_id: "ext:movie-1083381",
-      tmdb_id: 1083381,
+      tmdb_id: "1083381",
       availability: "unreleased",
       release_date: "2026-12-18",
     });
@@ -888,7 +822,7 @@ describe("an anticipated slide", () => {
   it("offers a Request once the title is out, and More Info opens the title page", () => {
     const item = movieSlide({
       content_id: "ext:movie-603",
-      tmdb_id: 603,
+      tmdb_id: "603",
       availability: "released_unowned",
       release_date: "2026-01-01",
     });

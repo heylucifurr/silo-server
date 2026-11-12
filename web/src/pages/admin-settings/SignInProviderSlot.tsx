@@ -33,6 +33,7 @@ import {
 import { pluginPagePath } from "@/lib/pluginPresentation";
 import { cn } from "@/lib/utils";
 import { FeedbackLine, type Feedback } from "@/components/admin/FeedbackLine";
+import { useT, type Translate } from "@/i18n";
 
 import { SETTINGS_CONTROL_WIDTH, SettingFieldRow, SettingFieldStatus } from "./SettingField";
 import { SignInConfigField } from "./SignInConfigField";
@@ -47,6 +48,8 @@ import type { SignInProviderDrafts } from "./useSignInProviderDrafts";
 import { useBranding } from "@/hooks/useBranding";
 
 const CATALOG_PATH = "/admin/plugins?tab=catalog";
+/** Decorative dot between a provider's state and its login page name. */
+const SEPARATOR = "·";
 
 type SignInMode = "oauth" | "credentials" | "other";
 
@@ -80,14 +83,21 @@ function providerTitle(installation: PluginInstallation, all: PluginInstallation
 
 type ProviderState = { word: string; tone: "ok" | "warn" | "off" };
 
-function providerState(installation: PluginInstallation, missing: string[]): ProviderState {
-  if (!installation.enabled) return { word: "Plugin turned off", tone: "off" };
+function providerState(
+  installation: PluginInstallation,
+  missing: string[],
+  t: Translate,
+): ProviderState {
+  if (!installation.enabled)
+    return { word: t("web.admin.settings.signIn.provider.state.pluginOff"), tone: "off" };
   if (authBindingOf(installation)?.enabled === true) {
     return missing.length > 0
-      ? { word: "On, needs setup", tone: "warn" }
-      : { word: "On", tone: "ok" };
+      ? { word: t("web.admin.settings.signIn.provider.state.onNeedsSetup"), tone: "warn" }
+      : { word: t("web.admin.settings.signIn.provider.state.on"), tone: "ok" };
   }
-  return missing.length > 0 ? { word: "Needs setup", tone: "warn" } : { word: "Off", tone: "off" };
+  return missing.length > 0
+    ? { word: t("web.admin.settings.signIn.provider.state.needsSetup"), tone: "warn" }
+    : { word: t("web.admin.settings.signIn.provider.state.off"), tone: "off" };
 }
 
 function StateDot({ tone }: { tone: ProviderState["tone"] }) {
@@ -109,13 +119,17 @@ function StateDot({ tone }: { tone: ProviderState["tone"] }) {
 /** A read-only URL an admin registers at the provider, with a copy button. */
 function CopyField({
   label,
+  copyLabel,
   value,
   description,
 }: {
   label: string;
+  /** The copy button's accessible name. */
+  copyLabel: string;
   value: string;
   description: string;
 }) {
+  const t = useT();
   const valueId = useId();
   const descriptionId = useId();
   const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
@@ -137,10 +151,12 @@ function CopyField({
       descriptionId={descriptionId}
       status={
         copied === "ok" ? (
-          <SettingFieldStatus>Copied</SettingFieldStatus>
+          <SettingFieldStatus>
+            {t("web.admin.settings.signIn.provider.copy.copied")}
+          </SettingFieldStatus>
         ) : copied === "failed" ? (
           <SettingFieldStatus tone="warn">
-            Couldn't copy. Select the address and copy it by hand.
+            {t("web.admin.settings.signIn.provider.copy.failed")}
           </SettingFieldStatus>
         ) : null
       }
@@ -165,18 +181,18 @@ function CopyField({
         size="sm"
         variant="secondary"
         onClick={() => void copy()}
-        aria-label={`Copy ${label.toLowerCase()}`}
+        aria-label={copyLabel}
       >
         <Copy aria-hidden="true" />
-        Copy
+        {t("web.admin.settings.signIn.provider.copy.button")}
       </Button>
     </SettingFieldRow>
   );
 }
 
-function testErrorText(error: unknown): string {
+function testErrorText(error: unknown, t: Translate): string {
   if (error instanceof V2ProblemError && error.status === 409) return error.message;
-  return adminSignInErrorText(error, "The connection test didn't run.");
+  return adminSignInErrorText(error, t("web.admin.settings.signIn.provider.test.errorFallback"));
 }
 
 /** The steps a connection test ran, each with its result. */
@@ -187,6 +203,7 @@ function ConnectionTestResult({
   result: AuthConnectionTestResult;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
 }) {
+  const t = useT();
   const failed = result.steps.filter((step) => !step.ok).length;
   return (
     <div className="space-y-2" data-testid="sign-in-test-result">
@@ -199,13 +216,19 @@ function ConnectionTestResult({
         )}
       >
         {result.ok
-          ? "Every check passed."
+          ? t("web.admin.settings.signIn.provider.test.allPassed")
           : failed > 0
-            ? `${failed} of ${result.steps.length} checks failed.`
-            : "The test did not pass."}
+            ? t("web.admin.settings.signIn.provider.test.someFailed", {
+                total: result.steps.length,
+                failed: failed,
+              })
+            : t("web.admin.settings.signIn.provider.test.didNotPass")}
       </h4>
       {result.steps.length > 0 ? (
-        <ol className="space-y-1.5" aria-label="Connection test steps">
+        <ol
+          className="space-y-1.5"
+          aria-label={t("web.admin.settings.signIn.provider.test.stepsLabel")}
+        >
           {result.steps.map((step) => (
             <li key={step.id} className="flex items-start gap-2 text-sm">
               {step.ok ? (
@@ -218,8 +241,15 @@ function ConnectionTestResult({
               )}
               <span className="min-w-0">
                 <span className="font-medium">
-                  {step.label}
-                  <span className="sr-only">{step.ok ? ": passed" : ": failed"}</span>
+                  {t(
+                    step.ok
+                      ? "web.admin.settings.signIn.provider.test.stepPassed"
+                      : "web.admin.settings.signIn.provider.test.stepFailed",
+                    {
+                      label: step.label,
+                      hidden: (chunks) => <span className="sr-only">{chunks}</span>,
+                    },
+                  )}
                 </span>
                 {step.message ? (
                   <span className="text-muted-foreground block text-xs break-words">
@@ -247,6 +277,7 @@ function Step({
   description?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="pt-5" data-testid="sign-in-step">
@@ -258,16 +289,19 @@ function Step({
           {number}
         </span>
         <h4 id={headingId} className="text-sm font-semibold">
-          <span className="sr-only">Step {number}: </span>
-          {title}
+          {t("web.admin.settings.signIn.provider.step.heading", {
+            number: number,
+            title,
+            hidden: (chunks) => <span className="sr-only">{chunks}</span>,
+          })}
         </h4>
       </div>
       {description ? (
-        <p className="text-muted-foreground mt-1 ml-[32px] text-xs leading-relaxed">
+        <p className="text-muted-foreground ms-[32px] mt-1 text-xs leading-relaxed">
           {description}
         </p>
       ) : null}
-      <div className="settings-field-list ml-[32px]">{children}</div>
+      <div className="settings-field-list ms-[32px]">{children}</div>
     </section>
   );
 }
@@ -292,6 +326,7 @@ function useBindingSwitch({
   pageSaving: boolean;
   report: (feedback: Feedback) => void;
 }) {
+  const t = useT();
   const updateBinding = useUpdateSignInBinding();
   const bindingWrites = useIsMutating({ mutationKey: signInBindingMutationKey });
   const [confirmOff, setConfirmOff] = useState(false);
@@ -305,7 +340,13 @@ function useBindingSwitch({
       {
         onSuccess: () => report({ tone: "ok", text: success }),
         onError: (error) =>
-          report({ tone: "error", text: adminSignInErrorText(error, `Couldn't change ${label}.`) }),
+          report({
+            tone: "error",
+            text: adminSignInErrorText(
+              error,
+              t("web.admin.settings.signIn.provider.binding.changeFailed", { name: label }),
+            ),
+          }),
       },
     );
   }
@@ -314,20 +355,22 @@ function useBindingSwitch({
     <ConfirmDialog
       open={confirmOff}
       onOpenChange={setConfirmOff}
-      title={`Turn off ${label}?`}
+      title={t("web.admin.settings.signIn.provider.binding.turnOffTitle", { name: label })}
       description={
         localLoginOn
-          ? `People who sign in with ${label} can't sign in until it's back on. Their Silo accounts, and the connections to ${label}, stay.`
-          : `Password sign-in is off, so only break-glass admins can sign in until ${label} is back on. Silo accounts, and their connections to ${label}, stay.`
+          ? t("web.admin.settings.signIn.provider.binding.turnOffDescription", { name: label })
+          : t("web.admin.settings.signIn.provider.binding.turnOffDescriptionBreakGlass", {
+              name: label,
+            })
       }
-      confirmLabel="Turn off"
+      confirmLabel={t("web.admin.settings.signIn.provider.binding.turnOffConfirm")}
       variant="destructive"
       onConfirm={() =>
         write(
           false,
           localLoginOn
-            ? `${label} is off. Only Silo passwords sign in now.`
-            : `${label} is off. Password sign-in is off too, so only break-glass admins can sign in now.`,
+            ? t("web.admin.settings.signIn.provider.binding.turnedOff", { name: label })
+            : t("web.admin.settings.signIn.provider.binding.turnedOffBreakGlass", { name: label }),
         )
       }
       isPending={updateBinding.isPending}
@@ -336,7 +379,8 @@ function useBindingSwitch({
 
   return {
     pending: bindingWrites > 0 || pageSaving,
-    turnOn: () => write(true, `${label} is on. People can sign in with it now.`),
+    turnOn: () =>
+      write(true, t("web.admin.settings.signIn.provider.binding.turnedOn", { name: label })),
     askOff: () => setConfirmOff(true),
     dialog,
   };
@@ -372,6 +416,7 @@ function ProviderPanel({
   otherActive,
 }: ProviderPanelProps) {
   const { serverName } = useBranding();
+  const t = useT();
   const capability = authCapabilityOf(installation)!;
   const binding = authBindingOf(installation);
   // Turning the binding on or off is about the provider people sign in
@@ -380,7 +425,7 @@ function ProviderPanel({
   const enabled = binding?.enabled === true;
   const mode = signInModeOf(installation);
   const missing = missingSignInSetup(layout);
-  const state = providerState(installation, missing);
+  const state = providerState(installation, missing, t);
   const unsaved = drafts.changeCountOf(installation);
   const testConnection = useTestSignInConnection();
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -440,7 +485,7 @@ function ProviderPanel({
           requestAnimationFrame(() => testHeadingRef.current?.focus());
         },
         onError: (error) => {
-          setTestError(testErrorText(error));
+          setTestError(testErrorText(error, t));
           requestAnimationFrame(() => testErrorRef.current?.focus());
         },
       },
@@ -485,7 +530,7 @@ function ProviderPanel({
   const autoProvisionRow = (
     <SettingFieldRow
       key="auto-provision"
-      label="Create accounts on first sign-in"
+      label={t("web.admin.settings.signIn.provider.autoProvision.label")}
       htmlFor={autoProvisionId}
       dirty={autoProvision !== savedAutoProvision(installation)}
       description={`People the provider lets in get a ${serverName} account the first time they sign in. Off: only people whose ${serverName} account is already connected can sign in.`}
@@ -512,27 +557,33 @@ function ProviderPanel({
             <div className="py-3.5">
               <SettingFieldStatus tone="warn">
                 <span>
-                  The redirect URI needs the server's public URL. Set it in{" "}
-                  <Link to="/admin/settings/general" className="underline underline-offset-4">
-                    General settings
-                  </Link>
-                  .
+                  {t("web.admin.settings.signIn.provider.register.publicUrlMissing", {
+                    link: (chunks) => (
+                      <Link to="/admin/settings/general" className="underline underline-offset-4">
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
                 </span>
               </SettingFieldStatus>
             </div>
           ) : null}
           {callbackUrl ? (
             <CopyField
-              label="Redirect URI"
+              label={t("web.admin.settings.signIn.provider.register.redirectUri")}
+              copyLabel={t("web.admin.settings.signIn.provider.register.redirectUriCopy")}
               value={callbackUrl}
-              description="Also called the callback URL."
+              description={t("web.admin.settings.signIn.provider.register.redirectUriDescription")}
             />
           ) : null}
           {postLogoutUrl ? (
             <CopyField
-              label="Post-logout redirect URI"
+              label={t("web.admin.settings.signIn.provider.register.postLogoutUri")}
+              copyLabel={t("web.admin.settings.signIn.provider.register.postLogoutUriCopy")}
               value={postLogoutUrl}
-              description="Only needed if you turn on signing out at the provider (under Advanced)."
+              description={t(
+                "web.admin.settings.signIn.provider.register.postLogoutUriDescription",
+              )}
             />
           ) : null}
         </>
@@ -554,29 +605,33 @@ function ProviderPanel({
     });
   });
   if (layout.steps.length === 0) {
-    steps.push({ key: "accounts", title: "Choose who can sign in", body: autoProvisionRow });
+    steps.push({
+      key: "accounts",
+      title: t("web.admin.settings.signIn.provider.accounts.title"),
+      body: autoProvisionRow,
+    });
   }
   if (offersTest) {
     steps.push({
       key: "test",
-      title: "Test the connection",
+      title: t("web.admin.settings.signIn.provider.test.title"),
       description:
         unsaved > 0
-          ? "Tests your unsaved changes over the saved configuration. Nothing is saved."
-          : "Tests the saved configuration. Nothing is saved.",
+          ? t("web.admin.settings.signIn.provider.test.descriptionUnsaved")
+          : t("web.admin.settings.signIn.provider.test.descriptionSaved"),
       body: (
         <div className="space-y-3 py-3.5">
           <div className="flex flex-wrap items-end gap-2">
             {layout.testUsername ? (
               <div className="min-w-0 space-y-1">
                 <label htmlFor={testUsernameId} className="text-muted-foreground block text-xs">
-                  Look up a user (optional)
+                  {t("web.admin.settings.signIn.provider.test.lookUpLabel")}
                 </label>
                 <Input
                   id={testUsernameId}
                   value={testUsername}
                   onChange={(event) => setTestUsername(event.target.value)}
-                  placeholder="Username"
+                  placeholder={t("web.admin.settings.signIn.provider.test.usernamePlaceholder")}
                   autoComplete="off"
                   className="w-56"
                 />
@@ -592,13 +647,14 @@ function ProviderPanel({
               {testConnection.isPending ? (
                 <Loader2 className="animate-spin" aria-hidden="true" />
               ) : null}
-              {testConnection.isPending ? "Testing..." : "Test connection"}
+              {testConnection.isPending
+                ? t("web.admin.settings.signIn.provider.test.testing")
+                : t("web.admin.settings.signIn.provider.test.run")}
             </Button>
           </div>
           {layout.testUsername ? (
             <p className="text-muted-foreground text-xs">
-              With a username, the test also finds that person and shows their groups and the role
-              they would get. No password is used.
+              {t("web.admin.settings.signIn.provider.test.lookUpNote")}
             </p>
           ) : null}
           <div aria-live="polite">
@@ -628,7 +684,7 @@ function ProviderPanel({
     const shown = typed || ref.field.placeholder || label;
     steps.push({
       key: "login-name",
-      title: "Login button",
+      title: t("web.admin.settings.signIn.provider.loginName.title"),
       body: (
         <>
           <SignInConfigField
@@ -637,23 +693,29 @@ function ProviderPanel({
             idPrefix={`${idPrefix}-${ref.schemaKey}`}
             dirty={fieldChanged(entry, drafts.draftOf(installation, ref.schemaKey), ref.field)}
             onChange={(value) => drafts.setField(installation, entry, ref.field.key, value)}
-            label={mode === "credentials" ? "Directory name" : "Provider name"}
+            label={
+              mode === "credentials"
+                ? t("web.admin.settings.signIn.provider.loginName.directoryName")
+                : t("web.admin.settings.signIn.provider.loginName.providerName")
+            }
             description={
               mode === "oauth"
-                ? "Shown as “Sign in with …” on the login page and in the apps."
-                : "Shown on the login page and in the apps where people choose how to sign in."
+                ? t("web.admin.settings.signIn.provider.loginName.oauthDescription")
+                : t("web.admin.settings.signIn.provider.loginName.description")
             }
           />
           {mode === "oauth" ? (
-            <SettingFieldRow label="Preview">
+            <SettingFieldRow label={t("web.admin.settings.signIn.provider.loginName.preview")}>
               <span
                 aria-hidden="true"
                 className="border-border bg-muted/30 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium"
               >
                 <KeyRound className="size-4" />
-                Sign in with {shown}
+                {t("web.admin.settings.signIn.provider.loginName.previewButton", { name: shown })}
               </span>
-              <span className="sr-only">The login button reads: Sign in with {shown}</span>
+              <span className="sr-only">
+                {t("web.admin.settings.signIn.provider.loginName.previewSr", { name: shown })}
+              </span>
             </SettingFieldRow>
           ) : null}
         </>
@@ -664,22 +726,23 @@ function ProviderPanel({
   let blockedReason: ReactNode = null;
   if (!enabled) {
     if (!installation.enabled) {
-      blockedReason = (
-        <>
-          The plugin is turned off. Turn it on from its{" "}
+      blockedReason = t("web.admin.settings.signIn.provider.blocked.pluginOff", {
+        link: (chunks) => (
           <Link
             to={pluginPagePath(installation.plugin_id)}
             className="text-foreground underline underline-offset-4"
           >
-            plugin page
-          </Link>{" "}
-          first.
-        </>
-      );
+            {chunks}
+          </Link>
+        ),
+      });
     } else if (otherActive !== null) {
-      blockedReason = `${otherActive} is the sign-in provider now. A server has one at a time: turn it off to use ${title} instead.`;
+      blockedReason = t("web.admin.settings.signIn.provider.blocked.otherActive", {
+        active: otherActive,
+        provider: title,
+      });
     } else if (unsaved > 0) {
-      blockedReason = "Save your changes to turn it on.";
+      blockedReason = t("web.admin.settings.signIn.provider.blocked.unsaved");
     }
   }
 
@@ -695,11 +758,11 @@ function ProviderPanel({
             <span data-testid="sign-in-provider-state">{state.word}</span>
             {enabled && installation.enabled ? (
               <>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true">{SEPARATOR}</span>
                 <span>
                   {mode === "oauth"
-                    ? `the login page shows “Sign in with ${label}”`
-                    : `shown as “${label}” on the login page`}
+                    ? t("web.admin.settings.signIn.provider.header.oauthShown", { name: label })
+                    : t("web.admin.settings.signIn.provider.header.shownAs", { name: label })}
                 </span>
               </>
             ) : null}
@@ -708,7 +771,7 @@ function ProviderPanel({
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild size="sm" variant="ghost">
             <Link to={pluginPagePath(installation.plugin_id)}>
-              Plugin page
+              {t("web.admin.settings.signIn.provider.header.pluginPage")}
               <ArrowUpRight aria-hidden="true" />
             </Link>
           </Button>
@@ -720,7 +783,7 @@ function ProviderPanel({
               disabled={bindingSwitch.pending}
               onClick={bindingSwitch.askOff}
             >
-              Turn off
+              {t("web.admin.settings.signIn.provider.header.turnOff")}
             </Button>
           ) : (
             <Button
@@ -732,7 +795,7 @@ function ProviderPanel({
               {bindingSwitch.pending ? (
                 <Loader2 className="animate-spin" aria-hidden="true" />
               ) : null}
-              Turn on
+              {t("web.admin.settings.signIn.provider.header.turnOn")}
             </Button>
           )}
         </div>
@@ -742,8 +805,14 @@ function ProviderPanel({
       {blockedReason ? <p className="text-muted-foreground pt-1 text-sm">{blockedReason}</p> : null}
       {missing.length > 0 ? (
         <p className="pt-1 text-sm text-amber-600 dark:text-amber-400">
-          Needs setup: fill in {missing.join(", ")} and save
-          {enabled ? "." : " to turn it on."}
+          {t(
+            enabled
+              ? "web.admin.settings.signIn.provider.missing.enabled"
+              : "web.admin.settings.signIn.provider.missing.disabled",
+            {
+              fields: missing.join(", "),
+            },
+          )}
         </p>
       ) : null}
 
@@ -755,8 +824,12 @@ function ProviderPanel({
 
       {layout.advanced.length > 0 ? (
         <div className="pt-6">
-          <h4 className="text-sm font-semibold">Advanced</h4>
-          <p className="text-muted-foreground text-xs">The defaults work for most providers.</p>
+          <h4 className="text-sm font-semibold">
+            {t("web.admin.settings.signIn.provider.advanced.title")}
+          </h4>
+          <p className="text-muted-foreground text-xs">
+            {t("web.admin.settings.signIn.provider.advanced.description")}
+          </p>
           <div className="pt-1">
             {layout.advanced.map((group) => (
               <AdvancedSection
@@ -780,14 +853,16 @@ function ProviderPanel({
 
       {layout.unsupported.length > 0 ? (
         <p className="text-muted-foreground pt-4 text-sm">
-          Some of this plugin's settings can only be changed on its{" "}
-          <Link
-            to={pluginPagePath(installation.plugin_id)}
-            className="text-foreground underline underline-offset-4"
-          >
-            plugin page
-          </Link>
-          .
+          {t("web.admin.settings.signIn.provider.unsupported", {
+            link: (chunks) => (
+              <Link
+                to={pluginPagePath(installation.plugin_id)}
+                className="text-foreground underline underline-offset-4"
+              >
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       ) : null}
 
@@ -830,6 +905,7 @@ function TurnOffActiveProvider({
   pageSaving: boolean;
 }) {
   const { serverName } = useBranding();
+  const t = useT();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
   const label = authProviderLabel(active);
@@ -856,7 +932,7 @@ function TurnOffActiveProvider({
           disabled={bindingSwitch.pending}
           onClick={bindingSwitch.askOff}
         >
-          Turn off {label}
+          {t("web.admin.settings.signIn.provider.none.turnOffActive", { name: label })}
         </Button>
       </div>
       <FeedbackLine feedback={feedback} focusRef={statusRef} />
@@ -892,6 +968,7 @@ export function SignInProviderSlot({
   connectionTestServed,
 }: SignInProviderSlotProps) {
   const { serverName } = useBranding();
+  const t = useT();
   const [picked, setPicked] = useState<Selection | null>(null);
   const groupLabelId = useId();
 
@@ -906,7 +983,7 @@ export function SignInProviderSlot({
   if (failed) {
     return (
       <p className="text-destructive py-3.5 text-sm" role="alert">
-        Couldn't read the installed plugins. Reload the page to try again.
+        {t("web.admin.settings.signIn.provider.slot.readFailed")}
       </p>
     );
   }
@@ -915,13 +992,14 @@ export function SignInProviderSlot({
   if (candidates.length === 0) {
     return (
       <p className="text-muted-foreground py-3.5 text-sm">
-        No sign-in plugin is installed. Install{" "}
-        <span className="text-foreground font-medium">OpenID Connect Sign-in</span> or{" "}
-        <span className="text-foreground font-medium">LDAP Sign-in</span> from the{" "}
-        <Link to={CATALOG_PATH} className="text-foreground underline underline-offset-4">
-          plugin catalog
-        </Link>
-        , then set it up here.
+        {t("web.admin.settings.signIn.provider.slot.noPlugins", {
+          b: (chunks) => <span className="text-foreground font-medium">{chunks}</span>,
+          link: (chunks) => (
+            <Link to={CATALOG_PATH} className="text-foreground underline underline-offset-4">
+              {chunks}
+            </Link>
+          ),
+        })}
       </p>
     );
   }
@@ -947,7 +1025,7 @@ export function SignInProviderSlot({
         id: installation.id as Selection,
         title: providerTitle(installation, candidates),
         detail: PROTOCOL_EXAMPLES[signInModeOf(installation)] || authProviderName(installation),
-        state: providerState(installation, missingSignInSetup(layout)),
+        state: providerState(installation, missingSignInSetup(layout), t),
       };
     }),
     { id: "none", title: "None", detail: `Only ${serverName} passwords.` },
@@ -956,7 +1034,7 @@ export function SignInProviderSlot({
   return (
     <div className="pb-2">
       <span id={groupLabelId} className="sr-only">
-        Sign-in provider to show
+        {t("web.admin.settings.signIn.provider.slot.groupLabel")}
       </span>
       <div
         role="group"
@@ -972,7 +1050,7 @@ export function SignInProviderSlot({
               aria-pressed={on}
               onClick={() => setPicked(choice.id)}
               className={cn(
-                "bg-muted/20 hover:bg-muted/40 rounded-xl border px-3.5 py-3 text-left transition-colors",
+                "bg-muted/20 hover:bg-muted/40 rounded-xl border px-3.5 py-3 text-start transition-colors",
                 on
                   ? "border-[var(--settings-accent)] ring-1 ring-[var(--settings-accent)]"
                   : "border-border",
@@ -996,8 +1074,9 @@ export function SignInProviderSlot({
       </div>
       {active && candidates.length > 1 ? (
         <p className="text-muted-foreground pt-2 text-xs">
-          A server uses one provider at a time. To switch, turn off{" "}
-          {providerTitle(active, candidates)} first.
+          {t("web.admin.settings.signIn.provider.slot.oneAtATime", {
+            name: providerTitle(active, candidates),
+          })}
         </p>
       ) : null}
 

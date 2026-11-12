@@ -13,6 +13,7 @@ import {
 } from "@/components/settings/settingsSearch";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useT } from "@/i18n";
 import { useUserSettingsGroups } from "@/hooks/useUserSettingsGroups";
 import { resolveSettingsDocumentTitle } from "@/lib/documentTitle";
 import {
@@ -47,6 +48,7 @@ const ALL_SETTINGS_PATHS = new Set(
  * it.
  */
 export default function SettingsLayout() {
+  const t = useT();
   const location = useLocation();
   const groups = useUserSettingsGroups();
   const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
@@ -79,10 +81,10 @@ export default function SettingsLayout() {
     <div className="lg:pt-8">
       <Link
         to="/settings"
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring mb-5 inline-flex w-fit items-center gap-1.5 rounded-lg pr-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring mb-5 inline-flex w-fit items-center gap-1.5 rounded-lg pe-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        All settings
+        {t("web.settings.layout.allSettings")}
       </Link>
       <PageFrame>
         <PageColumn width={wideSetting ? "full" : "settings"}>
@@ -95,6 +97,7 @@ export default function SettingsLayout() {
 
 function SettingsIndex({ groups }: { groups: readonly UserSettingsNavGroup[] }) {
   const { serverName } = useBranding();
+  const t = useT();
   const [search, setSearch] = useState("");
   const filteredGroups = useMemo(
     () => filterSettingsSearchGroups(groups, search),
@@ -128,7 +131,7 @@ function SettingsIndex({ groups }: { groups: readonly UserSettingsNavGroup[] }) 
             href: userSettingsHref(item.path),
           })),
         }))}
-        ariaLabel="Settings pages"
+        ariaLabel={t("web.settings.index.ariaLabel")}
         idPrefix="settings-index"
       />
     </div>

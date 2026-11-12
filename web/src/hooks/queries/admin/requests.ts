@@ -6,16 +6,11 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { V2ProblemError } from "@/api/v2/request";
-import { captureProfileRequestContext } from "@/api/client";
-import { adminAuthorityScope, type AdminAuthority } from "@/api/v2/adminAuthority";
+import { problemFieldDetail, V2ProblemError } from "@/api/v2/request";
+import { t } from "@/i18n";
 import {
   getAdminRequestSettingsV2,
   putAdminRequestSettingsV2,
-  getAdminRequestUserLimitV2,
-  putAdminRequestUserLimitV2,
-  getAdminRequestGroupLimitV2,
-  putAdminRequestGroupLimitV2,
   listAdminRequestIntegrationsV2,
   saveAdminRequestIntegrationV2,
   deleteAdminRequestIntegrationV2,
@@ -40,8 +35,6 @@ import {
   putAdminRequestRoutingV2,
   type AdminRequestQueueFilter,
   type AdminRequestDeleteOptions,
-  type RequestGroupLimit,
-  type RequestGroupLimitBody,
   type RequestRoute,
   type RequestRouteBody,
   type RequestRouteMediaType,
@@ -53,7 +46,6 @@ import type {
   LoadRequestIntegrationOptionsRequest,
   MediaRequest,
   RequestIntegration,
-  RequestUserLimit,
 } from "@/api/types";
 import { useRunTask } from "./tasks";
 import { adminKeys, requestKeys } from "../keys";
@@ -64,6 +56,13 @@ import {
   isValidationFailure,
   requestDownloadRefetchInterval,
 } from "../useRequests";
+
+export {
+  useRequestGroupLimit,
+  useRequestUserLimit,
+  useUpdateRequestGroupLimit,
+  useUpdateRequestUserLimit,
+} from "./requestLimits";
 
 const ADMIN_QUEUE_STALE_TIME = 10_000;
 /** Rows per queue page; the server answers at most 50. */
@@ -183,13 +182,13 @@ export function useApproveMediaRequest() {
     retry: false,
     mutationFn: (id: string) => approveAdminRequestV2(id),
     onSuccess: () => {
-      toast.success("Request approved");
+      toast.success(t("web.admin.requests.toast.approved"));
     },
     // A refused action still refreshes the queue: another admin may have
     // acted first, and the row should show what happened.
     onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to approve request");
+      toast.error(err instanceof Error ? err.message : t("web.admin.requests.toast.approveFailed"));
     },
   });
 }
@@ -201,13 +200,13 @@ export function useDeclineMediaRequest() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
       declineAdminRequestV2(id, reason),
     onSuccess: () => {
-      toast.success("Request declined");
+      toast.success(t("web.admin.requests.toast.declined"));
     },
     // A refused action still refreshes the queue: another admin may have
     // acted first, and the row should show what happened.
     onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to decline request");
+      toast.error(err instanceof Error ? err.message : t("web.admin.requests.toast.declineFailed"));
     },
   });
 }
@@ -218,13 +217,13 @@ export function useRetryMediaRequest() {
     retry: false,
     mutationFn: (id: string) => retryAdminRequestV2(id),
     onSuccess: () => {
-      toast.success("Request queued for retry");
+      toast.success(t("web.admin.requests.toast.retried"));
     },
     // A refused action still refreshes the queue: another admin may have
     // acted first, and the row should show what happened.
     onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to retry request");
+      toast.error(err instanceof Error ? err.message : t("web.admin.requests.toast.retryFailed"));
     },
   });
 }
@@ -277,13 +276,13 @@ export function useAdminCancelMediaRequest() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
       cancelAdminRequestV2(id, reason),
     onSuccess: () => {
-      toast.success("Request cancelled");
+      toast.success(t("web.admin.requests.toast.cancelled"));
     },
     // A refused action still refreshes the queue: another admin may have
     // acted first, and the row should show what happened.
     onSettled: () => invalidateRequestSurfaces(queryClient),
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to cancel request");
+      toast.error(err instanceof Error ? err.message : t("web.admin.requests.toast.cancelFailed"));
     },
   });
 }
@@ -376,7 +375,12 @@ export function useBulkRequestAction() {
           failures.push({
             id: request.id,
             title: request.title,
-            message: problemMessage(err, `Failed to ${action} request`),
+            message: problemMessage(
+              err,
+              action === "approve"
+                ? t("web.admin.requests.toast.approveFailed")
+                : t("web.admin.requests.toast.declineFailed"),
+            ),
           });
         }
         done += 1;
@@ -422,7 +426,7 @@ export function useUpdateRequestSettings() {
     retry: false,
     mutationFn: putAdminRequestSettingsV2,
     onSuccess: (saved) => {
-      toast.success("Request settings saved");
+      toast.success(t("web.admin.requests.toast.settingsSaved"));
       // The editor adopts the saved record; the cache has to hold it first,
       // or a clean editor would follow the query back to the replaced one.
       queryClient.setQueryData(adminKeys.requestSettings(), saved);
@@ -430,7 +434,9 @@ export function useUpdateRequestSettings() {
       invalidateRequestSurfaces(queryClient);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to save request settings");
+      toast.error(
+        err instanceof Error ? err.message : t("web.admin.requests.toast.settingsSaveFailed"),
+      );
       // A refused save (412) means someone else saved; read their version so
       // a discarded draft starts from it.
       queryClient.invalidateQueries({ queryKey: adminKeys.requestSettings() });
@@ -459,10 +465,10 @@ function invalidateRequestServers(queryClient: ReturnType<typeof useQueryClient>
   void queryClient.invalidateQueries({ queryKey: adminKeys.requestRouting() });
 }
 
-/** "movies" for a Radarr, "series" for a Sonarr, "requests" for anything else. */
-function serverRequestNoun(saved: RequestIntegration): string {
+/** "radarr" or "sonarr" for the toast's select (movies, series), "other" for anything else. */
+function serverKind(saved: RequestIntegration): string {
   const kind = saved.plugin_config?.service_kind;
-  return kind === "radarr" ? "movies" : kind === "sonarr" ? "series" : "requests";
+  return kind === "radarr" || kind === "sonarr" ? kind : "other";
 }
 
 /**
@@ -477,7 +483,9 @@ async function savedServerMessage(
   before: RequestRouting | undefined,
   added: boolean,
 ): Promise<string> {
-  const plain = added ? "Server added" : "Server saved";
+  const plain = added
+    ? t("web.admin.requests.toast.serverAdded")
+    : t("web.admin.requests.toast.serverSaved");
   try {
     const routing = await queryClient.fetchQuery({
       queryKey: adminKeys.requestRouting(),
@@ -485,7 +493,10 @@ async function savedServerMessage(
       staleTime: 0,
     });
     if (before?.mode === "standard" && routing.mode === "advanced") {
-      return `${saved.name} ${added ? "added" : "saved"}. Routing is now Advanced, so you can choose which ${serverRequestNoun(saved)} go to each server.`;
+      const values = { name: saved.name, kind: serverKind(saved) };
+      return added
+        ? t("web.admin.requests.toast.serverAddedAdvanced", values)
+        : t("web.admin.requests.toast.serverSavedAdvanced", values);
     }
     if (!added) return plain;
     if (routing.mode === "standard") {
@@ -493,10 +504,16 @@ async function savedServerMessage(
         (d) => d.hd_integration_id === saved.id || d.uhd_integration_id === saved.id,
       );
       if (destination?.uhd_integration_id === saved.id) {
-        return `${saved.name} added. 4K versions of ${destination.media_type === "series" ? "series" : "movies"} now go to it.`;
+        return t("web.admin.requests.toast.serverAddedUhd", {
+          name: saved.name,
+          media_type: destination.media_type,
+        });
       }
       if (destination) {
-        return `${saved.name} added. Every ${destination.media_type} request now goes to it.`;
+        return t("web.admin.requests.toast.serverAddedEvery", {
+          name: saved.name,
+          media_type: destination.media_type,
+        });
       }
       return plain;
     }
@@ -509,7 +526,10 @@ async function savedServerMessage(
       (route) => route.is_fallback && route.hd.integration_id === saved.id,
     );
     if (fallback) {
-      return `${saved.name} added. Every ${fallback.media_type} request now goes to it.`;
+      return t("web.admin.requests.toast.serverAddedEvery", {
+        name: saved.name,
+        media_type: fallback.media_type,
+      });
     }
   } catch {
     // The routing could not be read; the plain toast is still true.
@@ -537,8 +557,8 @@ function useSaveRequestIntegration(added: boolean) {
         err instanceof Error
           ? err.message
           : added
-            ? "Failed to add server"
-            : "Failed to save server",
+            ? t("web.admin.requests.toast.serverAddFailed")
+            : t("web.admin.requests.toast.serverSaveFailed"),
       );
     },
   });
@@ -558,11 +578,13 @@ export function useDeleteRequestIntegration() {
     retry: false,
     mutationFn: deleteAdminRequestIntegrationV2,
     onSuccess: () => {
-      toast.success("Server deleted");
+      toast.success(t("web.admin.requests.toast.serverDeleted"));
       invalidateRequestServers(queryClient);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to delete server");
+      toast.error(
+        err instanceof Error ? err.message : t("web.admin.requests.toast.serverDeleteFailed"),
+      );
     },
   });
 }
@@ -601,13 +623,15 @@ export function useUpdateRequestRouting() {
     onSuccess: (saved) => {
       queryClient.setQueryData(adminKeys.requestRouting(), saved);
       toast.success(
-        saved.mode === "standard" ? "Standard routing is on" : "Advanced routing is on",
+        saved.mode === "standard"
+          ? t("web.admin.requests.toast.standardRoutingOn")
+          : t("web.admin.requests.toast.advancedRoutingOn"),
       );
       // Advanced can fill in Everything else; a preview answers differently.
       void invalidateRequestRoutes(queryClient);
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to change routing");
+      toast.error(err instanceof Error ? err.message : t("web.admin.requests.toast.routingFailed"));
       void queryClient.invalidateQueries({ queryKey: adminKeys.requestRouting() });
     },
   });
@@ -644,7 +668,7 @@ function storeRequestRoute(queryClient: ReturnType<typeof useQueryClient>, saved
 function problemMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
   if (!(err instanceof V2ProblemError)) return err.message;
-  const details = [err.message, ...(err.problem.errors ?? []).map((e) => e.detail)];
+  const details = [err.message, ...(err.problem.errors ?? []).map(problemFieldDetail)];
   return [...new Set(details.filter(Boolean))].join(" ");
 }
 
@@ -665,10 +689,10 @@ export function useCreateRequestRoute() {
     retry: false,
     mutationFn: (body: RequestRouteBody) => createAdminRequestRouteV2(body),
     onSuccess: () => {
-      toast.success("Rule added");
+      toast.success(t("web.admin.requests.toast.ruleAdded"));
       return invalidateRequestRoutes(queryClient);
     },
-    onError: (err) => routeMutationError(err, "Failed to add rule", true),
+    onError: (err) => routeMutationError(err, t("web.admin.requests.toast.ruleAddFailed"), true),
   });
 }
 
@@ -685,10 +709,15 @@ export function useUpdateRequestRoute({ inlineErrors = false }: { inlineErrors?:
       body: RequestRouteBody;
     }) => updateAdminRequestRouteV2(route, body),
     onSuccess: (saved) => {
-      toast.success(saved.is_fallback ? "Everything else saved" : "Rule saved");
+      toast.success(
+        saved.is_fallback
+          ? t("web.admin.requests.toast.fallbackSaved")
+          : t("web.admin.requests.toast.ruleSaved"),
+      );
       storeRequestRoute(queryClient, saved);
     },
-    onError: (err) => routeMutationError(err, "Failed to save routing", inlineErrors),
+    onError: (err) =>
+      routeMutationError(err, t("web.admin.requests.toast.routeSaveFailed"), inlineErrors),
     // After a refused save too: the list then carries the other admin's version.
     onSettled: () => invalidateRequestRoutes(queryClient),
   });
@@ -700,9 +729,9 @@ export function useDeleteRequestRoute() {
     retry: false,
     mutationFn: (route: Pick<RequestRoute, "id" | "etag">) => deleteAdminRequestRouteV2(route),
     onSuccess: () => {
-      toast.success("Rule deleted");
+      toast.success(t("web.admin.requests.toast.ruleDeleted"));
     },
-    onError: (err) => routeMutationError(err, "Failed to delete rule"),
+    onError: (err) => routeMutationError(err, t("web.admin.requests.toast.ruleDeleteFailed")),
     onSettled: () => invalidateRequestRoutes(queryClient),
   });
 }
@@ -733,7 +762,7 @@ export function useReorderRequestRoutes() {
       if (context?.previous) {
         queryClient.setQueryData(adminKeys.requestRoutes(), context.previous);
       }
-      routeMutationError(err, "Failed to reorder rules");
+      routeMutationError(err, t("web.admin.requests.toast.reorderFailed"));
     },
     onSettled: () => invalidateRequestRoutes(queryClient),
   });
@@ -764,86 +793,6 @@ export function useLoadRequestIntegrationOptions() {
     mutationFn: ({ id, body }: { id: string; body: LoadRequestIntegrationOptionsRequest }) =>
       loadAdminRequestIntegrationOptionsV2(id, body),
     // Silent background probe: callers surface load failures inline (no toast).
-  });
-}
-
-export function useRequestUserLimit(userId?: number) {
-  return useQuery({
-    queryKey: adminKeys.requestUserLimit(userId ?? 0),
-    queryFn: () => getAdminRequestUserLimitV2(userId!),
-    enabled: Boolean(userId && userId > 0),
-    staleTime: REQUESTS_STALE_TIME,
-  });
-}
-
-export function useUpdateRequestUserLimit() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    retry: false,
-    mutationFn: ({ userId, body }: { userId: number; body: RequestUserLimit }) =>
-      putAdminRequestUserLimitV2(userId, body),
-    onSuccess: (saved, variables) => {
-      toast.success("Request settings saved");
-      // The editor adopts the saved record; the cache has to hold it first,
-      // or a clean editor would follow the query back to the replaced one.
-      queryClient.setQueryData(adminKeys.requestUserLimit(variables.userId), saved);
-      invalidateRequestSurfaces(queryClient);
-    },
-    onError: (err, variables) => {
-      toast.error(err instanceof Error ? err.message : "Failed to save the request settings");
-      // A refused save (412) means someone else saved; read their version so
-      // an explicit reload starts from it.
-      queryClient.invalidateQueries({ queryKey: adminKeys.requestUserLimit(variables.userId) });
-    },
-  });
-}
-
-/**
- * An access group's request approval and limit. An editor passes the
- * authority it read the group under, so the limit it saves carries a
- * validator from the same profile.
- */
-export function useRequestGroupLimit(groupId?: number | null, authority?: AdminAuthority) {
-  const context = authority ?? captureProfileRequestContext();
-  return useQuery({
-    queryKey: adminKeys.requestGroupLimit(groupId ?? 0, adminAuthorityScope(context)),
-    queryFn: () => getAdminRequestGroupLimitV2(groupId!, context ?? undefined),
-    enabled: Boolean(groupId && groupId > 0),
-    staleTime: REQUESTS_STALE_TIME,
-    retry: false,
-  });
-}
-
-/**
- * Saves an access group's request approval and limit. Silent: the group
- * editor saves it together with the group and reports both.
- */
-export function useUpdateRequestGroupLimit() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    retry: false,
-    mutationFn: ({
-      limit,
-      body,
-      profileContext,
-    }: {
-      limit: Pick<RequestGroupLimit, "group_id" | "etag">;
-      body: RequestGroupLimitBody;
-      /** The authority the limit was read under; the active one when omitted. */
-      profileContext?: AdminAuthority;
-    }) => putAdminRequestGroupLimitV2(limit, body, profileContext),
-    onSuccess: (saved, { profileContext }) => {
-      queryClient.setQueryData(
-        adminKeys.requestGroupLimit(saved.group_id, adminAuthorityScope(profileContext)),
-        saved,
-      );
-      invalidateRequestSurfaces(queryClient);
-    },
-    onError: (_err, { limit, profileContext }) => {
-      queryClient.invalidateQueries({
-        queryKey: adminKeys.requestGroupLimit(limit.group_id, adminAuthorityScope(profileContext)),
-      });
-    },
   });
 }
 

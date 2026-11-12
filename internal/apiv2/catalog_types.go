@@ -1,6 +1,7 @@
 package apiv2
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,9 @@ type CatalogItem struct {
 	RatingTMDB             *float64                  `json:"rating_tmdb,omitempty"`
 	RatingRTCritic         *int                      `json:"rating_rt_critic,omitempty" doc:"Rotten Tomatoes critic score, 0-100. Absent unless an administrator shows rt_critic (see getRatingsCapability); a viewer who curates the item's metadata gets it on item detail regardless"`
 	RatingRTAudience       *int                      `json:"rating_rt_audience,omitempty" doc:"Rotten Tomatoes audience score, 0-100. Absent unless an administrator shows rt_audience (see getRatingsCapability); a viewer who curates the item's metadata gets it on item detail regardless"`
+	ImdbID                 string                    `json:"imdb_id,omitempty" doc:"The item's IMDb ID, the one item detail shows. On movie and series cards in catalog browse, collection, favorites, and history listings, and on item detail, when the item has one; Home and library section cards and episode cards leave it absent" example:"tt0113277"`
+	TmdbID                 string                    `json:"tmdb_id,omitempty" doc:"The item's TMDB ID, the one item detail shows. Present where imdb_id is, and on an anticipated slide the library lacks, for its title page and a request" example:"949"`
+	TvdbID                 string                    `json:"tvdb_id,omitempty" doc:"The item's TVDB ID, the one item detail shows. Present where imdb_id is" example:"81189"`
 	OriginalLanguage       string                    `json:"original_language,omitempty" doc:"Original language, normally an ISO 639-1 code (ISO 639-3 when none exists, such as fil); provider codes such as TMDB's xx pass through, and audiobook and ebook items can carry the file's raw tag" example:"en"`
 	Overview               string                    `json:"overview,omitempty"`
 	ReleaseDate            *string                   `json:"release_date,omitempty" format:"date" doc:"Calendar date, YYYY-MM-DD" example:"1995-12-15"`
@@ -57,7 +61,6 @@ type CatalogItem struct {
 	LogoURL                string                    `json:"logo_url,omitempty" format:"uri-reference" doc:"Presigned, short-lived"`
 	HeroVideoURL           string                    `json:"hero_video_url,omitempty" format:"uri-reference" doc:"A short clip of the title's trailer, for a hero to play behind its backdrop. Presigned, long-lived; absent when this server has no clip for the title"`
 	Availability           string                    `json:"availability,omitempty" enum:"unreleased,released_unowned,in_library" doc:"On an anticipated slide: in_library means the library now has the title and the slide plays; unreleased and released_unowned describe a curated title the library lacks, before and after its release date. Absent on every other card"`
-	TMDBID                 int                       `json:"tmdb_id,omitempty" doc:"On an anticipated slide the library lacks: its TMDB id, for the title page and a request. Absent on every other card"`
 	InWatchlist            *bool                     `json:"in_watchlist,omitempty" doc:"On an anticipated slide the library lacks: whether the viewer has it on their watchlist. Absent on every other card"`
 	Requestable            *bool                     `json:"requestable,omitempty" doc:"On an anticipated slide the library lacks: whether the viewer may request it. Absent on every other card and while requests are off"`
 	MangaChapterCount      *int                      `json:"manga_chapter_count,omitempty"`
@@ -109,6 +112,8 @@ type CatalogItemUserState struct {
 	IsFavorite    bool `json:"is_favorite" example:"false"`
 	InWatchlist   bool `json:"in_watchlist" example:"false"`
 	NotInterested bool `json:"not_interested" doc:"The profile marked the movie or series Not interested: recommendations leave it out and rank similar titles lower" example:"false"`
+	WatchedCount  *int `json:"watched_count,omitempty" doc:"Episodes the profile has watched; present on a series or season the profile has not finished" example:"4"`
+	UnplayedCount *int `json:"unplayed_count,omitempty" doc:"Available episodes the profile has not watched; present on a series or season the profile has not finished" example:"6"`
 }
 
 // CatalogItemUpcomingEvent is the next airing a card announces.
@@ -119,7 +124,7 @@ type CatalogItemUpcomingEvent struct {
 	EpisodeTitle  *string  `json:"episode_title,omitempty"`
 	SeasonNumber  *int     `json:"season_number,omitempty"`
 	EpisodeNumber *int     `json:"episode_number,omitempty"`
-	Badges        []string `json:"badges" doc:"Empty, never null"`
+	Badges        []string `json:"badges" doc:"The calendar event's badges: series_premiere, season_premiere, finale; on a movie, digital or physical. Empty, never null"`
 }
 
 // CatalogItemSortMetrics is what a sorted listing sorted on.
@@ -155,7 +160,7 @@ func catalogUserStateOf(s *handlers.ItemUserStateView) *CatalogItemUserState {
 	if s == nil {
 		return nil
 	}
-	return &CatalogItemUserState{Played: s.Played, IsFavorite: s.IsFavorite, InWatchlist: s.InWatchlist, NotInterested: s.NotInterested}
+	return &CatalogItemUserState{Played: s.Played, IsFavorite: s.IsFavorite, InWatchlist: s.InWatchlist, NotInterested: s.NotInterested, WatchedCount: s.WatchedCount, UnplayedCount: s.UnplayedCount}
 }
 
 // instantOfRFC3339 parses a stored RFC 3339 stamp; an unparseable one is
@@ -212,8 +217,8 @@ func catalogItemOfSection(v handlers.SectionItemView, sel ratingsources.Selectio
 		SeriesBackdropURL: v.ParentArtwork.SeriesBackdropURL, SeriesBackdropThumbhash: v.ParentArtwork.SeriesBackdropThumbhash,
 		SeasonPosterURL: v.ParentArtwork.SeasonPosterURL, SeasonPosterThumbhash: v.ParentArtwork.SeasonPosterThumbhash,
 		OverlaySummary: catalogOverlayOf(v.OverlaySummary), Badges: v.Badges, ItemSource: v.ItemSource, UserState: catalogUserStateOf(v.UserState),
-		HeroVideoURL:               v.HeroVideoURL,
-		Availability:               v.Availability, TMDBID: v.TMDBID, InWatchlist: v.InWatchlist, Requestable: v.Requestable,
+		HeroVideoURL: v.HeroVideoURL,
+		Availability: v.Availability, InWatchlist: v.InWatchlist, Requestable: v.Requestable,
 		PendingTranslationLanguage: v.PendingTranslationLanguage, MachineTranslatedFields: v.MachineTranslatedFields,
 	}
 	if e := v.UpcomingEvent; e != nil {
@@ -222,6 +227,12 @@ func catalogItemOfSection(v handlers.SectionItemView, sel ratingsources.Selectio
 	}
 	if item.RatingTMDB == nil {
 		item.RatingTMDB = v.EpisodeRatingTMDB
+	}
+	// An anticipated slide the library lacks has no catalog row to carry the
+	// item's TMDB ID, so its curated one stands in: the title page and a
+	// request need it.
+	if item.TmdbID == "" && v.TMDBID > 0 {
+		item.TmdbID = strconv.Itoa(v.TMDBID)
 	}
 	return withShownRatings(item, sel)
 }
@@ -255,6 +266,7 @@ func catalogItemOfListing(v handlers.CollectionItemView, sel ratingsources.Selec
 		ContentRating: v.ContentRating, AdvisoryAge: v.AdvisoryAge, AdvisorySource: v.AdvisorySource,
 		Status: v.Status, ShowStatus: v.ShowStatus,
 		RatingIMDB: v.RatingIMDB, RatingTMDB: v.RatingTMDB, RatingRTCritic: v.RatingRTCritic, RatingRTAudience: v.RatingRTAudience,
+		ImdbID: v.ImdbID, TmdbID: v.TmdbID, TvdbID: v.TvdbID,
 		OriginalLanguage: v.OriginalLanguage, Overview: v.Overview, ReleaseDate: calendarDatePtr(v.ReleaseDate), LastAirDate: calendarDatePtr(v.LastAirDate), AddedAt: instantPtr(v.AddedAt),
 		PosterIsEpisodeStill: v.PosterIsEpisodeStill, BackdropIsEpisodeStill: v.BackdropIsEpisodeStill,
 		PosterURL: v.PosterURL, PosterThumbhash: v.PosterThumbhash, BackdropURL: v.BackdropURL, BackdropThumbhash: v.BackdropThumbhash, LogoURL: v.LogoURL,
@@ -264,6 +276,7 @@ func catalogItemOfListing(v handlers.CollectionItemView, sel ratingsources.Selec
 		MangaChapterCount: v.MangaChapterCount, MangaVolumeCount: v.MangaVolumeCount,
 		OverlaySummary: catalogOverlayOf(v.OverlaySummary), UserState: catalogUserStateOf(v.UserState),
 		WorkID: v.WorkID, WorkTitle: v.WorkTitle,
+		ProgressUpdatedAt: instantOfRFC3339(v.ProgressUpdatedAt), ItemSource: v.ItemSource,
 	}
 	if m := v.SortMetrics; m != nil {
 		metrics := CatalogItemSortMetrics{ReleaseDate: calendarDatePtr(m.ReleaseDate), RuntimeMinutes: m.RuntimeMinutes, Resolution: m.Resolution, BitrateKbps: m.BitrateKbps,

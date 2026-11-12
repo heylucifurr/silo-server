@@ -23,6 +23,7 @@ const opUpdateWatchProviderConnection = "updateWatchProviderConnection"
 // RequestLifecycleService preserves the domain's viewer checks for cancellation.
 type RequestLifecycleService interface {
 	Cancel(context.Context, mediarequests.Viewer, string, string) (*mediarequests.Request, error)
+	RemoveFailed(context.Context, mediarequests.Viewer, string) error
 	GetFeatureStatus(context.Context, mediarequests.Viewer) (mediarequests.FeatureStatus, error)
 	RequestCapabilityAllowed(context.Context, mediarequests.Viewer) (bool, error)
 }
@@ -34,6 +35,9 @@ type RequestCancelInput struct {
 	Body struct {
 		Reason string `json:"reason,omitempty" maxLength:"2000"`
 	}
+}
+type RequestRemoveInput struct {
+	ID ID `path:"id"`
 }
 type FeatureStatus struct {
 	Capability
@@ -65,6 +69,8 @@ type FeatureStatus struct {
 	CanRequest4K bool `json:"can_request_4k" doc:"Whether the viewer may ask for a 4K request. Only an admin account may; a non-admin always requests 1080p."`
 	// Request4KAvailable reports an enabled request connection takes 4K.
 	Request4KAvailable bool `json:"request_4k_available" doc:"Whether an enabled request connection takes 4K requests, so offering the 4K choice is meaningful."`
+	// RemoveFailedSupported advertises DELETE /requests/{id}.
+	RemoveFailedSupported bool `json:"remove_failed_supported" doc:"Whether removeFailedRequest is available: a requester can delete their own failed request that delivered nothing."`
 }
 type RequestFeatureStatusOutput struct {
 	Status       int
@@ -231,7 +237,7 @@ func registerRequestLifecycle(reg *Registry, requests RequestLifecycleService, p
 				return nil, requestProblem(err)
 			}
 		}
-		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced, FollowSupported: true, SeasonRequestsSupported: true, MissingSeasonsRequestable: status.MissingSeasonsRequestable, DownloadProgressSupported: true, DiscoverRowsSupported: true,
+		return &RequestFeatureStatusOutput{Body: FeatureStatus{Capability: Capability{State: enabledCapabilityState(status.RequestsEnabled), Allowed: &allowed}, RequestsEnabled: status.RequestsEnabled, RatingRestrictionsEnforced: status.RatingRestrictionsEnforced, FollowSupported: true, SeasonRequestsSupported: true, MissingSeasonsRequestable: status.MissingSeasonsRequestable, DownloadProgressSupported: true, DiscoverRowsSupported: true, RemoveFailedSupported: true,
 			WatchlistTitlesSupported: status.RequestsEnabled && reg.deps.WatchlistTitles != nil && reg.deps.WatchlistRequests != nil, WatchlistRequests: status.WatchlistRequests && allowed, CanRequest4K: status.CanRequest4K && allowed, Request4KAvailable: status.Request4KAvailable}}, nil
 	})
 	Register(reg, op(http.MethodPost, "/requests/{id}/cancel", "cancelRequest", "Cancel an accessible request."), func(ctx context.Context, in *RequestCancelInput) (*MediaRequestOutput, error) {
@@ -247,6 +253,21 @@ func registerRequestLifecycle(reg *Registry, requests RequestLifecycleService, p
 			return nil, requestProblem(err)
 		}
 		return &MediaRequestOutput{Body: mediaRequestOf(result, viewer)}, nil
+	})
+	remove := op(http.MethodDelete, "/requests/{id}", "removeFailedRequest", "Delete an accessible failed request that delivered nothing. Answers 409 when the request is no longer failed (an admin retried it, or the library completed it) or delivered a copy before failing.")
+	remove.DefaultStatus = http.StatusNoContent
+	Register(reg, remove, func(ctx context.Context, in *RequestRemoveInput) (*struct{}, error) {
+		if requests == nil {
+			return nil, unavailable("requests")
+		}
+		viewer, p := lifecycleViewer(ctx)
+		if p != nil {
+			return nil, p
+		}
+		if err := requests.RemoveFailed(ctx, viewer, string(in.ID)); err != nil {
+			return nil, requestProblem(err)
+		}
+		return nil, nil
 	})
 	scope := func(ctx context.Context) (int, string, error) {
 		if providers == nil {

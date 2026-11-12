@@ -7,6 +7,7 @@ import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsGroup } from "@/components/settings/SettingsGroup";
 import { Switch } from "@/components/ui/switch";
 import { useProfileDefaultWriter } from "@/hooks/queries/profileDefaults";
+import { useT } from "@/i18n";
 import {
   settingsCapabilitiesSupportKey,
   useEffectiveSettings,
@@ -14,6 +15,7 @@ import {
 } from "@/hooks/queries/settingValues";
 import { isAdminLocked } from "@/lib/settingsAdminDefaults";
 import { SETTING_DEFINITIONS, SETTING_KEYS, type SettingKey } from "@/lib/settingsContract";
+import { settingDescription, settingLabel } from "@/lib/settingsText";
 
 import { TitleArtSettingsGroup } from "./TitleArtSettingsGroup";
 
@@ -28,6 +30,7 @@ const EPISODE_SPOILER_KEYS = [
  * can also be this browser's alone (see TitleArtSettingsGroup).
  */
 export default function TitlePagesSettings() {
+  const t = useT();
   const capabilities = useSettingsCapabilities();
   const supportsThemeMusic = settingsCapabilitiesSupportKey(
     capabilities.data,
@@ -61,14 +64,17 @@ export default function TitlePagesSettings() {
   const read = (key: SettingKey) =>
     (effective?.[key]?.value ?? SETTING_DEFINITIONS[key].defaultValue) as boolean;
 
-  const switchRow = (key: SettingKey, description = SETTING_DEFINITIONS[key].description) => {
+  const switchRow = (
+    key: SettingKey,
+    description = settingDescription(SETTING_DEFINITIONS[key]),
+  ) => {
     // A switch the server administrator forced shows the forced value, which
     // is what the effective read already returns, and cannot be changed here.
     const locked = isAdminLocked(effective?.[key]);
     return (
       <SettingRow
         key={key}
-        label={SETTING_DEFINITIONS[key].label}
+        label={settingLabel(SETTING_DEFINITIONS[key])}
         description={description}
         note={
           locked ? (
@@ -84,7 +90,7 @@ export default function TitlePagesSettings() {
             checked={read(key)}
             disabled={disabled || locked}
             onCheckedChange={(value) =>
-              save(key, value).catch(() => toast.error("Failed to save title page setting"))
+              save(key, value).catch(() => toast.error(t("web.settings.titlePages.saveFailed")))
             }
           />
         )}
@@ -95,14 +101,17 @@ export default function TitlePagesSettings() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Title Pages"
-        subtitle="What a movie or show page shows and plays when you open it."
+        title={t("web.settings.titlePages.title")}
+        subtitle={t("web.settings.titlePages.subtitle")}
       />
 
       <TitleArtSettingsGroup />
 
       {supportsThemeMusic ? (
-        <SettingsGroup title="Sound" description="Plays while a title's page is open.">
+        <SettingsGroup
+          title={t("web.settings.titlePages.soundTitle")}
+          description={t("web.settings.titlePages.soundDescription")}
+        >
           {switchRow(SETTING_KEYS.UI_THEME_MUSIC_ENABLED)}
           {supportsThemeMusicLoop ? switchRow(SETTING_KEYS.UI_THEME_MUSIC_LOOP) : null}
         </SettingsGroup>
@@ -110,17 +119,17 @@ export default function TitlePagesSettings() {
 
       {supportsEpisodeSpoilers ? (
         <SettingsGroup
-          title="Spoilers"
-          description="Applies to episodes you have not started, on every device that uses this profile."
+          title={t("web.settings.titlePages.spoilersTitle")}
+          description={t("web.settings.titlePages.spoilersDescription")}
         >
           {EPISODE_SPOILER_KEYS.map((key) => switchRow(key))}
         </SettingsGroup>
       ) : null}
 
-      <SettingsGroup title="Age guidance">
+      <SettingsGroup title={t("web.settings.titlePages.ageGuidanceTitle")}>
         {switchRow(
           SETTING_KEYS.CATALOG_SHOW_ADVISORY_AGE,
-          "Show a suggested minimum viewer age, such as Common Sense Media's, on a title's page. This only shows the age; a household manager can limit a profile by it in the profile's access settings.",
+          t("web.settings.titlePages.advisoryAgeDescription"),
         )}
       </SettingsGroup>
     </div>

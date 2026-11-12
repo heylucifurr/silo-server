@@ -1,19 +1,36 @@
 import type { MediaRequest, RequestMediaType, RequestTarget } from "@/api/types";
 import type { AdminRequestCounts, AdminRequestQueueView } from "@/api/v2/adminRequests";
+import { t, type MessageKey } from "@/i18n";
 import { canWithdrawRequest, formatRequestStatus } from "@/lib/mediaRequests";
 
 export type { AdminRequestQueueView as RequestQueueView };
 
-/** The queue's views, in tab order, with the count each one shows. */
+/** The queue's views, in tab order, with the count each one shows. `label` and `empty` are message ids. */
 export const REQUEST_QUEUE_VIEWS: readonly {
   value: AdminRequestQueueView;
-  label: string;
-  empty: string;
+  label: MessageKey;
+  empty: MessageKey;
 }[] = [
-  { value: "needs_approval", label: "Needs approval", empty: "Nothing is waiting for approval." },
-  { value: "in_progress", label: "In progress", empty: "Nothing is on its way to the library." },
-  { value: "failed", label: "Failed", empty: "No request has failed." },
-  { value: "done", label: "Done", empty: "No request has finished yet." },
+  {
+    value: "needs_approval",
+    label: "web.admin.requests.queue.view.needsApproval",
+    empty: "web.admin.requests.queue.view.needsApprovalEmpty",
+  },
+  {
+    value: "in_progress",
+    label: "web.admin.requests.queue.view.inProgress",
+    empty: "web.admin.requests.queue.view.inProgressEmpty",
+  },
+  {
+    value: "failed",
+    label: "web.admin.requests.queue.view.failed",
+    empty: "web.admin.requests.queue.view.failedEmpty",
+  },
+  {
+    value: "done",
+    label: "web.admin.requests.queue.view.done",
+    empty: "web.admin.requests.queue.view.doneEmpty",
+  },
 ];
 
 export function parseRequestQueueView(value: string | null): AdminRequestQueueView | undefined {
@@ -100,31 +117,38 @@ export function canRefreshRequestFromSeerr(
   return (request.targets ?? []).some((target) => Boolean(target.external_id));
 }
 
-const EVENT_LABELS: Record<string, string> = {
-  created: "Requested",
-  approved: "Approved",
+/** Text for a WeFlix-only event, which upstream's message catalog does not have. */
+interface EnglishText {
+  english: string;
+}
+
+const EVENT_LABELS: Record<string, MessageKey | EnglishText> = {
+  created: "web.admin.requests.event.created",
+  approved: "web.admin.requests.event.approved",
   // The server records an admin's approval as a status change, and an
   // automatic one as `approved`.
-  status_approved: "Approved",
-  status_queued: "Sent to the server",
-  status_downloading: "Downloading",
-  status_completed: "Downloaded",
-  available_in_library: "In the library",
-  outcome_declined: "Declined",
-  outcome_cancelled: "Cancelled",
-  outcome_failed: "Failed",
-  outcome_removed: "Removed",
+  status_approved: "web.admin.requests.event.approved",
+  status_queued: "web.admin.requests.event.queued",
+  status_downloading: "web.admin.requests.event.downloading",
+  status_completed: "web.admin.requests.event.downloaded",
+  available_in_library: "web.admin.requests.event.inLibrary",
+  outcome_declined: "web.admin.requests.event.declined",
+  outcome_cancelled: "web.admin.requests.event.cancelled",
+  outcome_failed: "web.admin.requests.event.failed",
+  outcome_removed: { english: "Removed" },
   // The reconcile pass retires a request Seerr no longer has.
-  removed_in_seerr: "Removed in the download server",
+  removed_in_seerr: { english: "Removed in the download server" },
   // The status sync moved a target to match what Seerr reports.
-  synced_from_seerr: "Status synced",
-  retried: "Retried",
-  submit_deferred: "Couldn't send yet",
+  synced_from_seerr: { english: "Status synced" },
+  retried: "web.admin.requests.event.retried",
+  submit_deferred: "web.admin.requests.event.deferred",
 };
 
 /** A history entry's type in plain words; a type this client doesn't know shows as it is. */
 export function formatRequestEventType(type: string): string {
-  return EVENT_LABELS[type] ?? type;
+  const label = Object.hasOwn(EVENT_LABELS, type) ? EVENT_LABELS[type] : undefined;
+  if (!label) return type;
+  return typeof label === "string" ? t(label) : label.english;
 }
 
 /** The account a `?user=` link names, or undefined for anything but a positive ID. */
@@ -139,14 +163,16 @@ export type RequestQueueMediaFilter = RequestMediaType | "all";
 
 /** A target's status in words; its server's own status is shown beside it. */
 export function formatTargetStatus(status: RequestTarget["status"]): string {
-  return status === "failed" ? "Failed" : formatRequestStatus(status);
+  return status === "failed" ? t("web.admin.requests.target.failed") : formatRequestStatus(status);
 }
 
 /** A target's server, falling back to the kind of integration. */
 export function targetServerName(
   target: Pick<RequestTarget, "instance_name" | "integration_kind">,
 ) {
-  return target.instance_name || target.integration_kind || "Unknown server";
+  return (
+    target.instance_name || target.integration_kind || t("web.admin.requests.target.unknownServer")
+  );
 }
 
 /** The request's own closing reason, or the error that stopped it. */

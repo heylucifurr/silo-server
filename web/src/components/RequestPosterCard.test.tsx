@@ -283,20 +283,4 @@ describe("RequestPosterCard (mine variant)", () => {
 
     expect(onCancel).toHaveBeenCalledOnce();
   });
-
-  it("links an available request to its library item", () => {
-    render(
-      <MemoryRouter>
-        <RequestPosterCard
-          variant="mine"
-          request={{ ...request, status: "completed", library_content_id: "movie-603" }}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("link", { name: "Open The Matrix in library" })).toHaveAttribute(
-      "href",
-      "/item/movie-603",
-    );
-  });
 });

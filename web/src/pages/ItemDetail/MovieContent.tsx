@@ -13,6 +13,7 @@ import { useIsActingAdmin } from "@/hooks/useIsActingAdmin";
 import { useAmbientColor } from "@/hooks/useAmbientColor";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import CastCarousel from "@/components/CastCarousel";
+import MovieBoxSetRow from "@/components/boxsets/MovieBoxSetRow";
 import { buildCrewGroups } from "@/components/castCrewGroups";
 import DownloadVersionPicker from "@/components/DownloadVersionPicker";
 import EditMetadataDialog from "@/components/EditMetadataDialog";
@@ -46,6 +47,7 @@ import { formatRuntimeMinutes } from "@/lib/mediaFormat";
 import { useQualityPreference } from "@/hooks/queries/qualityPreference";
 import { useDetailWatchTogether } from "@/pages/watchtogether/DetailWatchTogether";
 import { hasMachineTranslation } from "./components/machineTranslation";
+import { useT } from "@/i18n";
 
 export default function MovieContent({
   item,
@@ -57,6 +59,7 @@ export default function MovieContent({
   libraryId?: number;
   showAdvisoryAge?: boolean;
 }) {
+  const t = useT();
   const { translating: overviewTranslating, onTranslate: onTranslateOverview } =
     useOnViewTranslation(item);
   const navigate = useNavigate();
@@ -202,7 +205,7 @@ export default function MovieContent({
     deleteSubtitlePreference.mutate(item.content_id);
   };
 
-  const primaryAction = resolveLeafPrimaryAction(item, "Play");
+  const primaryAction = resolveLeafPrimaryAction(item, t("web.detail.actions.play"));
   const watchTogether = useDetailWatchTogether({
     item,
     target:
@@ -217,7 +220,7 @@ export default function MovieContent({
         : null,
   });
   const restartHref =
-    primaryAction.label === "Resume" && item.versions.length > 0
+    primaryAction.resuming && item.versions.length > 0
       ? `/watch/${item.content_id}?restart=1`
       : undefined;
   const { data: similarData, isLoading: similarLoading } = useSimilarItems(item.content_id);
@@ -251,7 +254,7 @@ export default function MovieContent({
         <DetailHero
           title={title}
           topNav={<PageBack />}
-          context="Movie"
+          context={t("web.detail.hero.typeMovie")}
           studioLabel={firstStudio}
           backdropUrl={item.backdrop_url}
           backdropThumbhash={item.backdrop_thumbhash}
@@ -335,9 +338,7 @@ export default function MovieContent({
               onSplitItem={
                 canCurateMetadata && item.versions.length > 1 ? () => setSplitOpen(true) : undefined
               }
-              onShowMediaInfo={
-                canCurateMetadata && item.versions.length > 0 ? () => openMediaInfo() : undefined
-              }
+              onShowMediaInfo={item.versions.length > 0 ? () => openMediaInfo() : undefined}
               versions={item.versions}
               playbackVariants={item.playback_variants}
               selectedVersion={selectedVersion}
@@ -403,15 +404,13 @@ export default function MovieContent({
             version={selectedVersion}
             title={title}
           />
-          {canCurateMetadata && (
-            <MediaInfoDialog
-              open={mediaInfoOpen}
-              onOpenChange={setMediaInfoOpen}
-              versions={item.versions}
-              title={title}
-              initialFileId={mediaInfoFileId}
-            />
-          )}
+          <MediaInfoDialog
+            open={mediaInfoOpen}
+            onOpenChange={setMediaInfoOpen}
+            versions={item.versions}
+            title={title}
+            initialFileId={mediaInfoFileId}
+          />
           {watchTogether.sheet}
         </>
       }
@@ -426,6 +425,8 @@ export default function MovieContent({
           <CastCarousel cast={item.cast ?? []} crewGroups={crewGroups} limit={12} prefetchPeople />
         </DetailSection>
       )}
+
+      <MovieBoxSetRow contentId={item.content_id} libraryId={libraryId} />
 
       {/* More Like This */}
       {similarLoading ? (

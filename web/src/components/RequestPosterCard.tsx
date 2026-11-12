@@ -28,6 +28,7 @@ import {
   mediaItemMenuIconClassName,
   mediaItemMenuTriggerClassName,
 } from "@/components/mediaItemMenuTrigger";
+import { useT } from "@/i18n";
 
 // The badge takes the top-left corner and truncates before it reaches the
 // In library chip on the right.
@@ -142,6 +143,7 @@ function DiscoverCard({
 }
 
 function MineCard({ request, fluid, onCancel, isCancelling }: Omit<MineProps, "variant">) {
+  const t = useT();
   const state = requestDisplayState(request.status, request.outcome, request.state);
   const isClosed =
     request.outcome === "failed" ||
@@ -199,10 +201,10 @@ function MineCard({ request, fluid, onCancel, isCancelling }: Omit<MineProps, "v
               size="xs"
               onClick={onCancel}
               disabled={isCancelling}
-              aria-label={`Cancel request for ${request.title}`}
-              className="text-muted-foreground mt-1.5 -ml-2"
+              aria-label={t("web.requests.cancel.actionFor", { title: request.title })}
+              className="text-muted-foreground -ms-2 mt-1.5"
             >
-              Cancel request
+              {t("web.requests.cancel.action")}
             </Button>
           ) : null}
         </>
@@ -245,9 +247,10 @@ function ExternalTitleCard({
   /** Request details below the caption; pass null for none. */
   children?: ReactNode;
 }) {
+  const t = useT();
   const { cardPresentation } = useUICustomization();
   const meta = [formatMediaType(mediaType), year].filter(Boolean).join(" · ");
-  const label = `${title} (${meta})`;
+  const label = t("web.requests.card.label", { title, meta });
 
   return (
     <div
@@ -305,11 +308,16 @@ export function RequestAction({
   pending: boolean;
   onRequest: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       disabled={pending}
-      aria-label={pending ? `Sending request for ${title}` : `Request ${title}`}
+      aria-label={
+        pending
+          ? t("web.requests.card.sendingFor", { title })
+          : t("web.requests.card.requestTitle", { title })
+      }
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -325,12 +333,12 @@ export function RequestAction({
       {pending ? (
         <>
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Sending
+          {t("web.requests.card.sending")}
         </>
       ) : (
         <>
           <Plus className="size-3.5 stroke-[2.5]" aria-hidden />
-          Request
+          {t("web.requests.request")}
         </>
       )}
     </button>
@@ -398,6 +406,7 @@ export function WatchlistAction({
   pending: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   const Icon = inWatchlist ? BookmarkCheck : Bookmark;
   return (
     <button
@@ -405,9 +414,13 @@ export function WatchlistAction({
       disabled={pending}
       aria-pressed={inWatchlist}
       aria-label={
-        inWatchlist ? `Remove ${title} from your watchlist` : `Add ${title} to your watchlist`
+        inWatchlist
+          ? t("web.requests.card.removeFromWatchlist", { title })
+          : t("web.requests.card.addToWatchlistFor", { title })
       }
-      title={inWatchlist ? "On Watchlist" : "Add to Watchlist"}
+      title={
+        inWatchlist ? t("web.requests.card.onWatchlist") : t("web.requests.card.addToWatchlist")
+      }
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();

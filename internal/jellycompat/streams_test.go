@@ -567,22 +567,29 @@ func TestBuildProxyRedirectURLCarriesMPEGTSForRemoteCopyRecipe(t *testing.T) {
 	}
 }
 
-// The proxy remux adds aac_adtstoasc for a copied AAC track, and that filter
-// rejects every other codec, so the token names the copied track's codec.
+// The proxy remux and fMP4 HLS copy add aac_adtstoasc for a copied AAC track,
+// and that filter rejects every other codec, so the token names the copied
+// track's codec.
 func TestBuildProxyRedirectURLCarriesCopiedRemuxAudioCodec(t *testing.T) {
 	h := &PlaybackHandler{JWTSecret: "test-secret"}
 	for _, test := range []struct {
 		name           string
+		method         playback.PlayMethod
+		hlsRemux       bool
 		codec          string
 		transcodeAudio bool
 		want           string
 	}{
-		{name: "copied ac3", codec: "ac3", want: "ac3"},
-		{name: "copied aac", codec: "aac", want: "aac"},
-		{name: "ac3 encoded to aac", codec: "ac3", transcodeAudio: true, want: ""},
+		{name: "copied ac3", method: playback.PlayRemux, codec: "ac3", want: "ac3"},
+		{name: "copied aac", method: playback.PlayRemux, codec: "aac", want: "aac"},
+		{name: "ac3 encoded to aac", method: playback.PlayRemux, codec: "ac3", transcodeAudio: true, want: ""},
+		{name: "hls copy keeps aac", method: playback.PlayTranscode, hlsRemux: true, codec: "aac", want: "aac"},
+		{name: "hls copy encodes ac3 to aac", method: playback.PlayTranscode, hlsRemux: true, codec: "ac3", transcodeAudio: true, want: ""},
+		{name: "hls video transcode encodes aac", method: playback.PlayTranscode, codec: "aac", want: ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := PlaybackMediaSource{
+				HLSRemux:       test.hlsRemux,
 				TranscodeAudio: test.transcodeAudio,
 				Version: catalog.FileVersion{
 					VideoTracks: []models.VideoTrack{{Codec: "h264"}},
@@ -590,19 +597,19 @@ func TestBuildProxyRedirectURLCarriesCopiedRemuxAudioCodec(t *testing.T) {
 				},
 			}
 			redirectURL, err := h.buildProxyRedirectURL(
-				"play-1", "upstream-1", string(playback.PlayRemux),
+				"play-1", "upstream-1", string(test.method),
 				&models.MediaFile{FilePath: "/media/movie.ts"}, source, nil, time.Time{},
 				"", 0, &nodepool.Node{URL: "http://proxy-1"}, netaccess.Path{},
 			)
 			if err != nil {
 				t.Fatal(err)
 			}
-			claims, err := streamtoken.Verify(proxyTokenFromRedirect(t, redirectURL, string(playback.PlayRemux)), h.JWTSecret)
+			claims, err := streamtoken.Verify(proxyTokenFromRedirect(t, redirectURL, string(test.method)), h.JWTSecret)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if claims.CopyAudioCodec != test.want {
-				t.Fatalf("remux proxy token copied audio codec = %q, want %q", claims.CopyAudioCodec, test.want)
+				t.Fatalf("proxy token copied audio codec = %q, want %q", claims.CopyAudioCodec, test.want)
 			}
 		})
 	}
@@ -614,9 +621,10 @@ func TestKeyframePlaylistOnlyComparedForCopyStreams(t *testing.T) {
 	encoded := testRemoteTranscodeSource()
 	encoded.KeyframePlaylist = true
 	recipe := playback.NewRecipeCard(7, "profile", encoded.FileID, "", playback.TranscodeOpts{
-		TargetCodecVideo: compatTargetVideoCodec,
-		TargetCodecAudio: compatTargetAudioCodec,
-		AudioTrackIndex:  compatAudioTrackIndexOrDefault(encoded),
+		TargetCodecVideo:  compatTargetVideoCodec,
+		TargetCodecAudio:  compatTargetAudioCodec,
+		AudioTrackIndex:   compatAudioTrackIndexOrDefault(encoded),
+		RequireAudioTrack: true,
 	})
 	if !compatRecipeMatchesSource(&recipe, encoded) {
 		t.Fatal("encoded source rejected its recipe over the keyframe playlist flag")
@@ -1372,6 +1380,71 @@ func TestRestartCompatTranscodeForAudioSelection_LocalRePersistsRecipe(t *testin
 	}
 }
 
+// A local session rebuilt from a recipe written before negotiated audio became
+// mandatory keeps its optional map while it plays the same track, but a new
+// selection makes the newly chosen track mandatory, live and in the recipe.
+func TestRestartCompatTranscodeForAudioSelection_LegacyLocalSessionRequiresNewTrack(t *testing.T) {
+	codec := NewResourceIDCodec()
+	version := testCompatVersion() // 1 video track, 2 audio tracks.
+	mainSource := testCompatSource(codec, version)
+	mainSource.SelectedAudioStreamIndex = intPtr(len(version.VideoTracks))
+	commentarySource := testCompatSource(codec, version)
+	commentarySource.SelectedAudioStreamIndex = intPtr(len(version.VideoTracks) + 1)
+
+	filePath := filepath.Join(t.TempDir(), "movie.mkv")
+	if err := os.WriteFile(filePath, []byte("video"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+	ffmpegPath := writeCompatTestFFmpeg(t)
+	transcodeDir := t.TempDir()
+	tm := playback.NewTranscodeManager()
+	tm.Config = func() playback.TranscodeRuntimeConfig {
+		return playback.TranscodeRuntimeConfig{TranscodeDir: transcodeDir, FFmpegPath: ffmpegPath}
+	}
+	legacy := playback.NewRecipeCard(7, "profile-1", version.FileID, "", playback.TranscodeOpts{
+		SessionID: "upstream-1", InputPath: filePath,
+		TargetCodecVideo: compatTargetVideoCodec, TargetCodecAudio: compatTargetAudioCodec,
+		SegmentDuration: compatSegmentDuration, AudioTrackIndex: 0,
+	})
+	playbackStore := NewPlaybackSessionStore(time.Hour, nil)
+	playbackStore.Put(PlaybackSession{
+		ID: "play-1", UpstreamSessionID: "upstream-1", UpstreamPlayMethod: "transcode",
+		MediaSources: []PlaybackMediaSource{mainSource}, Recipe: &legacy,
+	})
+	handler := &PlaybackHandler{
+		playbackStore: playbackStore,
+		sessionMgr: &testCompatSessionManager{sessions: map[string]*playback.Session{"upstream-1": {
+			ID: "upstream-1", UserID: 7, ProfileID: "profile-1", MediaFileID: version.FileID,
+			PlayMethod: playback.PlayTranscode, BasePlayMethod: playback.PlayTranscode,
+		}}},
+		fileResolver: testCompatFileResolver{file: &models.MediaFile{ID: version.FileID, FilePath: filePath}},
+		TranscodeDir: transcodeDir,
+		FFmpegPath:   ffmpegPath,
+		tm:           tm,
+	}
+
+	transcodeSession, err := handler.ensureTranscodeSession(context.Background(), "play-1", "upstream-1", mainSource)
+	if err != nil {
+		t.Fatalf("ensureTranscodeSession: %v", err)
+	}
+	t.Cleanup(func() { _ = transcodeSession.Close() })
+	if transcodeSession.Opts().RequireAudioTrack {
+		t.Fatal("setup did not rebuild the legacy optional-audio recipe")
+	}
+
+	playSession, _ := playbackStore.Get("play-1")
+	restarted, err := handler.restartCompatTranscodeForAudioSelection(context.Background(), playSession, commentarySource, 0)
+	if err != nil || !restarted {
+		t.Fatalf("restart on commentary = %t, err %v", restarted, err)
+	}
+	if opts := transcodeSession.Opts(); opts.AudioTrackIndex != 1 || !opts.RequireAudioTrack {
+		t.Fatalf("live opts = track %d required %t, want track 1 required", opts.AudioTrackIndex, opts.RequireAudioTrack)
+	}
+	if updated, ok := playbackStore.Get("play-1"); !ok || updated.Recipe == nil || !updated.Recipe.RequireAudioTrack {
+		t.Fatalf("persisted recipe after switch = %+v, want required audio", updated.Recipe)
+	}
+}
+
 func TestRestartCompatTranscodeForAudioSelection_RejectsUnsupportedSurroundSwitchBeforeMutation(t *testing.T) {
 	version := testCompatVersion()
 	version.AudioTracks[0].Channels = 2
@@ -1567,6 +1640,16 @@ func TestGenerateCompatCopyVideoMasterManifestCodecsListEveryFormat(t *testing.T
 		{"vp9 profile 1", models.VideoTrack{Codec: "vp9", Profile: "Profile 1", Level: -99, BitDepth: 8, Width: 640, Height: 360}, aac, false, ""},
 		{"vp9 unknown size", models.VideoTrack{Codec: "vp9", Profile: "Profile 0", Level: -99, BitDepth: 8}, aac, false, ""},
 		{"h264 unknown level", models.VideoTrack{Codec: "h264", Profile: "High", Width: 1920, Height: 1080}, aac, false, ""},
+		// Profile bytes as FFmpeg's MP4 muxer writes them into the copy's avcC.
+		{"h264 constrained baseline", models.VideoTrack{Codec: "h264", Profile: "Constrained Baseline", Level: 30, Width: 640, Height: 360}, aac, false, "avc1.42401E,mp4a.40.2"},
+		{"h264 high 10", models.VideoTrack{Codec: "h264", Profile: "High 10", Level: 40, BitDepth: 10, Width: 1920, Height: 1080}, aac, false, "avc1.6E0028,mp4a.40.2"},
+		{"h264 high 4:2:2", models.VideoTrack{Codec: "h264", Profile: "High 4:2:2", Level: 40, Width: 1920, Height: 1080}, aac, false, "avc1.7A0028,mp4a.40.2"},
+		// The intra profiles require constraint_set3_flag.
+		{"h264 high 10 intra", models.VideoTrack{Codec: "h264", Profile: "High 10 Intra", Level: 40, Width: 1920, Height: 1080}, aac, false, "avc1.6E1028,mp4a.40.2"},
+		{"h264 unnamed profile", models.VideoTrack{Codec: "h264", Profile: "Extended", Level: 30, Width: 640, Height: 360}, aac, false, ""},
+		{"hevc main", models.VideoTrack{Codec: "hevc", Profile: "Main", Level: 120, Width: 1920, Height: 1080}, aac, false, "hvc1.1.4.L120.B0,mp4a.40.2"},
+		// Range Extensions profiles differ only in constraint flags the probe does not report.
+		{"hevc range extensions", models.VideoTrack{Codec: "hevc", Profile: "Rext", Level: 153, BitDepth: 10, PixelFormat: "yuv422p10le", Width: 3840, Height: 2160}, aac, false, ""},
 		{"hevc unknown level", models.VideoTrack{
 			Codec: "hevc", Profile: "Main 10", Width: 3840, Height: 2160,
 			DVProfile: 8, DVLevel: 6, VideoRangeType: compatRangeDOVIWithHDR,

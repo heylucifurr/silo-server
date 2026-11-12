@@ -1,3 +1,5 @@
+import { useT } from "@/i18n";
+
 interface MetadataBadgesProps {
   year?: string;
   contentRating?: string;
@@ -36,6 +38,9 @@ export default function MetadataBadges({
   // rather than as chips of their own.
   const facts = [year, duration].filter((fact): fact is string => Boolean(fact));
 
+  const t = useT();
+  const advisoryLabel = advisorySource ? ADVISORY_SOURCE_LABELS[advisorySource] : undefined;
+  const age = advisoryAge ?? 0;
   return (
     <div className="flex flex-wrap items-center gap-2">
       {facts.length > 0 && (
@@ -48,35 +53,41 @@ export default function MetadataBadges({
         <span
           className="metadata-badge"
           title={
-            advisorySource && ADVISORY_SOURCE_LABELS[advisorySource]
-              ? `${ADVISORY_SOURCE_LABELS[advisorySource]} suggests age ${advisoryAge} and up.`
-              : `Suggested for ages ${advisoryAge} and up.`
+            advisoryLabel
+              ? t("web.detail.badges.advisorySourceTitle", { source: advisoryLabel, age })
+              : t("web.detail.badges.advisoryTitle", { age })
           }
         >
-          {advisorySource && ADVISORY_SOURCE_LABELS[advisorySource]
-            ? `${ADVISORY_SOURCE_LABELS[advisorySource]} ${advisoryAge}+`
-            : `${advisoryAge}+`}
+          {advisoryLabel
+            ? t("web.detail.badges.advisorySource", { source: advisoryLabel, age })
+            : t("web.detail.badges.advisory", { age })}
         </span>
       )}
       {seasonCount != null && (
         <span className="metadata-badge">
-          {seasonCount} {seasonCount === 1 ? "Season" : "Seasons"}
+          {t("web.detail.badges.seasons", { count: seasonCount, count_text: seasonCount })}
         </span>
       )}
       {seasonLabel && <span className="metadata-badge">{seasonLabel}</span>}
       {episodeCount != null && (
         <span className="metadata-badge">
-          {episodeCount} {episodeCount === 1 ? "Episode" : "Episodes"}
+          {t("web.detail.badges.episodes", {
+            count: episodeCount,
+            count_text: episodeCount,
+          })}
         </span>
       )}
       {volumeCount != null && volumeCount > 0 && (
         <span className="metadata-badge">
-          {volumeCount} {volumeCount === 1 ? "Volume" : "Volumes"}
+          {t("web.detail.badges.volumes", { count: volumeCount, count_text: volumeCount })}
         </span>
       )}
       {chapterCount != null && chapterCount > 0 && (
         <span className="metadata-badge">
-          {chapterCount} {chapterCount === 1 ? "Chapter" : "Chapters"}
+          {t("web.detail.badges.chapters", {
+            count: chapterCount,
+            count_text: chapterCount,
+          })}
         </span>
       )}
       {status && (

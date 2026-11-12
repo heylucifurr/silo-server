@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useAdminRequestCapabilities, useSyncRequests } from "@/hooks/queries/admin/requests";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 import { RequestQueue } from "@/pages/admin-requests/RequestQueue";
 import { EmptyPanel, RowsSkeleton } from "@/pages/admin-requests/queueParts";
 
@@ -33,27 +34,28 @@ export default function AdminRequests() {
 
 /** Sends a link to a retired tab where its content lives now. */
 function MovedTab({ tab, to }: { tab: string; to: string }) {
+  const t = useT();
   useEffect(() => {
     if (tab !== "overrides") return;
     // The fixed id keeps a double-run effect from stacking two toasts.
-    toast.info("Request limits moved to each account", {
+    toast.info(t("web.admin.requests.page.overridesMoved.title"), {
       id: OVERRIDES_MOVED_TOAST,
-      description:
-        "Open an account to set its request approval and limit. Access groups set them for everyone in the group.",
+      description: t("web.admin.requests.page.overridesMoved.description"),
     });
-  }, [tab]);
+  }, [tab, t]);
   return <Navigate to={to} replace />;
 }
 
 function RequestQueuePage() {
+  const t = useT();
   const capabilities = useAdminRequestCapabilities();
   const sync = useSyncRequests();
   if (capabilities.isLoading) return <RowsSkeleton />;
   if (!capabilities.data?.available) {
     return (
       <EmptyPanel
-        title="Request administration unavailable"
-        detail="Request administration could not be enabled on this server."
+        title={t("web.admin.requests.page.unavailable.title")}
+        detail={t("web.admin.requests.page.unavailable.detail")}
       />
     );
   }
@@ -61,8 +63,8 @@ function RequestQueuePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Requests"
-        subtitle="Approve, decline, and follow media requests."
+        title={t("web.admin.requests.page.title")}
+        subtitle={t("web.admin.requests.page.subtitle")}
         actions={
           <>
             {capabilities.data.seerr_sync ? (

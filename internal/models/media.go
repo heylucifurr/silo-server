@@ -27,6 +27,12 @@ type MediaFolder struct {
 	// TrickplayEnabled generates seek-bar previews for the library's video
 	// files (internal/trickplay). Off by default.
 	TrickplayEnabled bool
+	// BoxSetsEnabled browses the movies TMDB lists in one collection as a
+	// single box set card once at least BoxSetMinMovies of them are in the
+	// library. BoxSetsInSearch also lists matching box sets in search.
+	BoxSetsEnabled  bool
+	BoxSetMinMovies int
+	BoxSetsInSearch bool
 	// RealtimeMonitoring is the library's real-time monitoring switch. It
 	// takes effect only while the server-wide scanner.realtime_monitoring
 	// setting is on and the library is enabled.
@@ -509,6 +515,11 @@ type SubtitleTrack struct {
 	HearingImpaired  bool   `json:"hearing_impaired"`
 	External         bool   `json:"external"`
 	FileName         string `json:"file_name,omitempty"`
+	// IndexOnly marks an embedded track FFmpeg can't demux from the source,
+	// such as a Matroska S_TEXT/WEBVTT track, which the server reads through
+	// the container's index instead (embeddedsub). No route that demuxes the
+	// source with FFmpeg, on the server or in a client, can carry it.
+	IndexOnly bool `json:"index_only,omitempty"`
 }
 
 // ExternalSubtitle represents a sidecar subtitle file stored as JSONB.
@@ -716,6 +727,8 @@ type MediaItem struct {
 	Keywords                     []string
 	OriginalLanguage             string
 	ReleaseDate                  *string // ISO date, nullable
+	DigitalReleaseDate           *string // ISO date (movies only): earliest digital release in any country, nullable
+	PhysicalReleaseDate          *string // ISO date (movies only): earliest physical (disc) release in any country, nullable
 	FirstAirDate                 *string // ISO date (series only), nullable
 	LastAirDate                  *string // ISO date (series only), nullable
 	AirTime                      *string // Series broadcast time (e.g. "20:00"), nullable
@@ -833,6 +846,8 @@ type Season struct {
 	// BackdropFillOnly, with WriteBackdrop, writes only while the stored
 	// backdrop is still empty when the upsert holds the row.
 	BackdropFillOnly bool `json:"-"`
+	// LockedFields lists the fields a refresh keeps; see catalog.childLockedColumn.
+	LockedFields []int
 }
 
 // Episode represents a row in the episodes table.
@@ -866,6 +881,8 @@ type Episode struct {
 	// batch localization: the viewer's language this episode's description is
 	// missing, so an episode list can start on-view translation.
 	PendingTranslationLanguage string `json:"-"`
+	// LockedFields lists the fields a refresh keeps; see catalog.childLockedColumn.
+	LockedFields []int
 }
 
 // MediaItemRoot represents a row in the media_item_roots table.
