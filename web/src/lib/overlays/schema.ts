@@ -26,13 +26,13 @@ export function buildDefaultPrefs(): CardOverlayPrefs {
 // renders nor edits these, but their stored config must survive a round-trip:
 // the native clients' settings UIs can author them, and dropping them here
 // would erase another client's preference on the next web save. Their bases
-// mirror the native registries' defaults (ribbons: disabled), on the right edge
-// now that the top-right corner shows watch status.
+// mirror the native registries' defaults (ribbons: disabled), in the top-right
+// corner.
 const PASSTHROUGH_IDS = [
   "imdb_top_250",
   "rt_certified_fresh",
 ] as const satisfies readonly OverlayId[];
-const PASSTHROUGH_BASE: OverlayItemConfig = { enabled: false, position: "right-edge" };
+const PASSTHROUGH_BASE: OverlayItemConfig = { enabled: false, position: "top-right" };
 
 function isKnownOverlayId(v: unknown): v is OverlayId {
   return (
@@ -41,11 +41,11 @@ function isKnownOverlayId(v: unknown): v is OverlayId {
   );
 }
 
-// The stored position, or null when it is not one. The contract keeps
-// top-right valid for documents written before the corner held watch status;
-// such a badge moves to the right-edge rail, the same side of the card.
+// The stored position, or null when it is not one. WeFlix draws no right-edge
+// rail: a badge stored there (by upstream's settings, or a native client) is
+// shown in the top-right corner and saved back as top-right.
 function parsePosition(v: unknown): OverlayPosition | null {
-  if (v === "top-right") return "right-edge";
+  if (v === "right-edge") return "top-right";
   return typeof v === "string" && (OVERLAY_POSITIONS as readonly string[]).includes(v)
     ? (v as OverlayPosition)
     : null;
@@ -283,7 +283,6 @@ export function supportsOverlayStyles(support: OverlayServerSupport): boolean {
 // side, as the badge sat before the edge rails existed.
 const LEGACY_POSITION: Partial<Record<OverlayPosition, string>> = {
   "left-edge": "top-left",
-  "right-edge": "top-right",
 };
 
 // The document as the server can store it: ids it does not accept are

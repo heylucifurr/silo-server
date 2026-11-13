@@ -135,7 +135,10 @@ export function PosterCardPreviewView({
                     hasProgressBar={downloadPercent !== null}
                   />
                 ) : null}
-                <CardWatchStatus userState={OVERLAY_PREVIEW_WATCH_STATES[variant]} />
+                <CardWatchStatus
+                  userState={OVERLAY_PREVIEW_WATCH_STATES[variant]}
+                  overlayPrefs={overlayPrefs}
+                />
                 {hasShortcuts ? (
                   <div
                     aria-hidden="true"

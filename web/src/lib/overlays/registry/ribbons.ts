@@ -60,7 +60,7 @@ export const RIBBON_OVERLAYS: readonly OverlayDef[] = [
     get description() {
       return t("web.settings.overlays.badge.showStatus.description");
     },
-    defaultPosition: "right-edge",
+    defaultPosition: "top-right",
     defaultEnabled: false,
     iconId: "tv",
     iconCapable: true,

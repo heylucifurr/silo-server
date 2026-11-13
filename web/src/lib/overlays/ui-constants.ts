@@ -19,10 +19,10 @@ export const POSITION_OPTIONS: { value: OverlayPosition; label: string }[] = [
     },
   },
   {
-    value: "right-edge",
-    get label() {
-      return t("web.settings.overlays.position.rightEdge");
-    },
+    // WeFlix: upstream's catalog has no top-right label since it moved badges
+    // off that corner.
+    value: "top-right",
+    label: "Top Right",
   },
   {
     value: "bottom-left",

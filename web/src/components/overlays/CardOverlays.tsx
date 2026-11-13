@@ -520,8 +520,9 @@ function BandMarks({
 // Each card edge renders as ONE flex row holding the corner stacks on that
 // edge. Sharing a row lets flexbox divide the card width between opposing
 // corners (min-w-0 + truncate), so wide badges shrink instead of overlapping.
-// The top row holds only the left corner and stops short of the top-right
-// corner, which belongs to the watch-status indicator (CardWatchStatus).
+// The top row holds both top corners. WeFlix keeps badges in the top-right
+// corner; the watch-status indicator (CardWatchStatus) shows there only on a
+// card with no top-right badge, so the row stops short of it only then.
 // Badges placed on an edge rail stack vertically, centred on that side.
 //
 // Stacking contract with the card quick actions (watched/favorite bottom-left,
@@ -554,10 +555,10 @@ export default function CardOverlays({
       .slice(0, limit);
 
   const topLeft = resolve("top-left", MAX_BADGES_PER_CORNER);
+  const topRightBadges = resolve("top-right", MAX_BADGES_PER_CORNER);
   const bottomLeft = resolve("bottom-left", MAX_BADGES_PER_CORNER);
   const bottomRight = resolve("bottom-right", MAX_BADGES_PER_CORNER);
   const leftRail = resolve("left-edge", MAX_BADGES_PER_RAIL);
-  const rightRail = resolve("right-edge", MAX_BADGES_PER_RAIL);
   const wide = variant === "wide";
   const band = preset.layout === "band";
   const scalingMode: ScalingMode =
@@ -565,11 +566,12 @@ export default function CardOverlays({
   const layerRef = useRef<HTMLDivElement>(null);
   const edgeInset = overlayLength(EDGE_INSET, scalingMode, POSTER_VARS.edgeInset);
   const edgeGap = overlayLength(EDGE_GAP, scalingMode, POSTER_VARS.edgeGap);
-  // Poster cards keep the top-right corner clear for the watch-status
-  // indicator; wide cards never draw it.
-  const topRight = !wide
-    ? `calc(${edgeInset} + ${overlayLength(STATUS_RESERVE, scalingMode, POSTER_VARS.statusReserve)})`
-    : edgeInset;
+  // Without a top-right badge, a poster card keeps that corner clear for the
+  // watch-status indicator; wide cards never draw it.
+  const topRight =
+    !wide && topRightBadges.length === 0
+      ? `calc(${edgeInset} + ${overlayLength(STATUS_RESERVE, scalingMode, POSTER_VARS.statusReserve)})`
+      : edgeInset;
   // A filled badge on a rail sits flush against the edge as a tab; a
   // transparent one (minimal, band) keeps the corner inset.
   const flushRails = !band && preset.id !== "minimal";
@@ -632,7 +634,7 @@ export default function CardOverlays({
       data-card-overlays={variant}
       className="@container/card-overlays pointer-events-none absolute inset-0 z-10"
     >
-      {topLeft.length > 0 &&
+      {(topLeft.length > 0 || topRightBadges.length > 0) &&
         (band ? (
           <div
             data-overlay-edge="top"
@@ -645,15 +647,25 @@ export default function CardOverlays({
               paddingBottom: `calc(${edgeInset} * 3)`,
             }}
           >
-            <BandMarks badges={topLeft} preset={preset} scalingMode={scalingMode} />
+            <BandMarks
+              badges={[...topLeft, ...topRightBadges]}
+              preset={preset}
+              scalingMode={scalingMode}
+            />
           </div>
         ) : (
           <div
             data-overlay-edge="top"
-            className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-start gap-2"
+            className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2"
             style={{ top: edgeInset, right: topRight, left: edgeInset, gap: edgeGap }}
           >
             <BadgeStack badges={topLeft} align="start" preset={preset} scalingMode={scalingMode} />
+            <BadgeStack
+              badges={topRightBadges}
+              align="end"
+              preset={preset}
+              scalingMode={scalingMode}
+            />
           </div>
         ))}
       {leftRail.length > 0 && (
@@ -668,21 +680,6 @@ export default function CardOverlays({
             preset={preset}
             scalingMode={scalingMode}
             rail={flushRails ? "left" : undefined}
-          />
-        </div>
-      )}
-      {rightRail.length > 0 && (
-        <div
-          data-overlay-edge="right"
-          className="pointer-events-none absolute top-1/2 z-10 flex max-w-[60%] -translate-y-1/2 justify-end"
-          style={{ right: railInset }}
-        >
-          <BadgeStack
-            badges={rightRail}
-            align="end"
-            preset={preset}
-            scalingMode={scalingMode}
-            rail={flushRails ? "right" : undefined}
           />
         </div>
       )}

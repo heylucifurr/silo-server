@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 
 import type { MediaItemUserState } from "@/api/types";
 import { numberText, useT } from "@/i18n";
+import { orderedOverlaysForPosition, type CardOverlayPrefs } from "@/lib/overlays";
 
 import {
   EDGE_INSET,
@@ -13,6 +14,11 @@ import {
 
 interface CardWatchStatusProps {
   userState: MediaItemUserState | undefined;
+  /**
+   * The card's badge settings, when it draws badges. WeFlix keeps badges in
+   * the top-right corner, so the indicator steps aside while any is placed there.
+   */
+  overlayPrefs?: CardOverlayPrefs | null;
 }
 
 // The episodes a started, unfinished series or season has left, or null.
@@ -25,14 +31,15 @@ function remainingEpisodes(userState: MediaItemUserState | undefined): number | 
 }
 
 // The poster's top-right corner: a check on a watched title, or the episodes
-// a started series has left. No badge is ever placed in this corner (see
-// CardOverlays), and it shows whether or not badges are on. The layer is
-// sized from the card width the same way the badges are.
-export default function CardWatchStatus({ userState }: CardWatchStatusProps) {
+// a started series has left. It shows whether or not badges are on, except
+// that a badge placed in the top-right corner takes it (see CardOverlays). The
+// layer is sized from the card width the same way the badges are.
+export default function CardWatchStatus({ userState, overlayPrefs }: CardWatchStatusProps) {
   const t = useT();
   const played = userState?.played === true;
   const left = remainingEpisodes(userState);
   if (!played && left === null) return null;
+  if (overlayPrefs && orderedOverlaysForPosition(overlayPrefs, "top-right").length > 0) return null;
 
   // Poster cards have no legacy CSS-variable pass for this corner; a browser
   // without container query units gets the reference size.

@@ -10,14 +10,18 @@ import {
 const ref = (pair: string) => `${pair.repeat(32)}.webp`;
 
 describe("parseOverlayPrefs", () => {
-  it("moves a badge stored in the top-right corner to the right edge", () => {
+  it("keeps a top-right badge there and moves a right-edge badge to the top-right corner", () => {
     const prefs = parseOverlayPrefs({
       version: 2,
       preset: "classic",
       order: [],
-      items: { rating_imdb: { enabled: true, position: "top-right" } },
+      items: {
+        rating_imdb: { enabled: true, position: "top-right" },
+        rating_tmdb: { enabled: true, position: "right-edge" },
+      },
     });
-    expect(prefs.items.rating_imdb.position).toBe("right-edge");
+    expect(prefs.items.rating_imdb.position).toBe("top-right");
+    expect(prefs.items.rating_tmdb.position).toBe("top-right");
   });
 
   it("keeps the style and images it accepts and drops the rest", () => {

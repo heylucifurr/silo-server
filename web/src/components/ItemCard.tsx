@@ -262,7 +262,7 @@ export default function ItemCard({
               <CardOverlays data={overlayDataFromBrowseItem(item)} prefs={overlayPrefs} />
             )}
             {item.status === "matched" && item.type !== "manga" && (
-              <CardWatchStatus userState={item.user_state} />
+              <CardWatchStatus userState={item.user_state} overlayPrefs={overlayPrefs} />
             )}
             {(mangaStatus || mangaCountLabel) && (
               /* One shared row so the two chips split the card width and

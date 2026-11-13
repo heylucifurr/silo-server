@@ -55,7 +55,7 @@ const SHORTCUT_CHOICES: readonly { value: ShortcutChoice; labelKey: MessageKey }
 const POSITION_CLASSES: Record<OverlayPosition, string> = {
   "top-left": "top-1 left-1 h-4 w-7",
   "left-edge": "top-1/2 left-0 h-7 w-3 -translate-y-1/2 rounded-l-none",
-  "right-edge": "top-1/2 right-0 h-7 w-3 -translate-y-1/2 rounded-r-none",
+  "top-right": "top-1 right-1 h-4 w-7",
   "bottom-left": "bottom-1 left-1 h-4 w-7",
   "bottom-right": "bottom-1 right-1 h-4 w-7",
 };
@@ -110,12 +110,6 @@ function BadgeAdjust({
             aria-label={t("web.settings.cardOverlay.position")}
             className="bg-muted/50 border-border/70 relative aspect-[2/3] w-20 shrink-0 rounded-md border"
           >
-            {/* The top-right corner is the watch-status indicator's. */}
-            <span
-              aria-hidden="true"
-              // eslint-disable-next-line silo/no-physical-direction -- a corner of the artwork
-              className="border-foreground/25 absolute top-1 right-1 h-3.5 w-3.5 rounded-full border border-dashed"
-            />
             {POSITION_OPTIONS.map((option) => {
               const active = config.position === option.value;
               return (

@@ -281,7 +281,7 @@ export default memo(function SectionItemCard({
               />
             )}
             {item.status === "matched" && !upcomingEvent && (
-              <CardWatchStatus userState={item.user_state} />
+              <CardWatchStatus userState={item.user_state} overlayPrefs={overlayPrefs} />
             )}
             {upcomingEvent && upcomingEvent.badges.length > 0 && (
               // eslint-disable-next-line silo/no-physical-direction -- on the poster artwork, which doesn't mirror; matches CardOverlays and CardWatchStatus

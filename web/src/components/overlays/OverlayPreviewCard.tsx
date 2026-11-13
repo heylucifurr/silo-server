@@ -55,7 +55,10 @@ export function OverlayPreviewCard({
         {showPosterOverlays ? (
           <CardOverlays data={data} prefs={prefs} hasProgressBar={downloadPercent !== null} />
         ) : null}
-        <CardWatchStatus userState={OVERLAY_PREVIEW_WATCH_STATES[variant]} />
+        <CardWatchStatus
+          userState={OVERLAY_PREVIEW_WATCH_STATES[variant]}
+          overlayPrefs={showPosterOverlays ? prefs : null}
+        />
       </div>
     </div>
   );

@@ -1,14 +1,17 @@
 import type { CSSProperties } from "react";
 
-// Position on the poster card where a badge group is anchored: three corners
-// and a rail centred on each side edge. The top-right corner belongs to the
-// watch-status indicator (CardWatchStatus), so no badge is placed there.
+// Position on the poster card where a badge group is anchored: four corners
+// and a rail centred on the left edge. WeFlix keeps badges in the top-right
+// corner, as before upstream gave it to the watch-status indicator; the
+// indicator steps aside on a card whose top-right corner has badges
+// (CardWatchStatus). Upstream's right-edge rail is not offered: a stored
+// right-edge badge reads as top-right (see parsePosition in schema.ts).
 export const OVERLAY_POSITIONS = [
   "top-left",
+  "top-right",
   "bottom-left",
   "bottom-right",
   "left-edge",
-  "right-edge",
 ] as const;
 export type OverlayPosition = (typeof OVERLAY_POSITIONS)[number];
 
