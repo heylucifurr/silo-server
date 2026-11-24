@@ -39,7 +39,12 @@ drift off theme (Christmas lists that include Mean Girls).
 2. Otherwise the first enabled built-in theme in `recipes.SeasonalThemeOrder`
    (short holidays, then month-long ones, weekly themes, summer last) that is in
    season (the row's `theme_dates[theme]` when set, else the predicate), with
-   the vibe from `vibes[theme]` or the default.
+   the vibe from `vibes[theme]` or the default. WeFlix: when several enabled
+   themes are in season, the first one with a web appearance
+   (`theme_appearance[theme]`) wins over higher-ranked undressed ones, so a
+   dressed holiday whose window overlaps another stays up through the overlap
+   (`weflixActiveTheme` in `recipes/seasonal_weflix.go`). Without an
+   appearance on any in-season theme the order above applies unchanged.
 3. Otherwise a legacy single-theme row (`theme`) when in season or pinned.
 
 Nothing in season means an empty row, which the home API drops. The row title

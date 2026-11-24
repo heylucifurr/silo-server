@@ -491,7 +491,7 @@ func ActiveSeasonalPick(p SeasonalThemedParams, now time.Time) (SeasonalPick, bo
 	var theme string
 	switch {
 	case len(p.EnabledThemes) > 0:
-		theme = p.ActiveTheme(now)
+		theme = p.weflixActiveTheme(now) // WeFlix: dressed holidays first (seasonal_weflix.go)
 	case p.Theme != "":
 		_, known := SeasonalPredicates[p.Theme]
 		if known && (p.Mode == "pinned" || p.themeInSeason(p.Theme, now)) {
